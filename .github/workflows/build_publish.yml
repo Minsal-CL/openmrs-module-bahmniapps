@@ -90,7 +90,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           file: package/docker/Dockerfile
           push: true
-          tags: hcsba/bahmni-web:${{ env.ARTIFACT_VERSION }},hcsba/bahmni-web:latest
+          tags: cuentasio/bahmni-web:${{ env.ARTIFACT_VERSION }},cuentasio/bahmni-web:latest
       - name: Update Version and Image Tag
         run: |
           yq --inplace '.image.tag = "${{ env.ARTIFACT_VERSION }}"' $HELM_CHART_PATH/values.yaml
