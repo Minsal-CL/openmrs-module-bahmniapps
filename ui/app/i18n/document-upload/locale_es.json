@@ -33,5 +33,8 @@
     "VISIT_LABEL": "Visitas",
     "VISIT_FROM_LABEL": "Desde:",
     "VISIT_TO_LABEL": "a:",
-    "FILE_TYPE_NOT_SUPPORTED_MESSAGE": "El tipo de archivo no es compatible"
+    "FILE_TYPE_NOT_SUPPORTED_MESSAGE": "El tipo de archivo no es compatible",
+    "FILE_SIZE_LIMIT_EXCEEDED_MESSAGE": "Se excedió el límite de tamaño del archivo. Por favor, sube un archivo menor a {{maxAllowedSize}} MB.",
+    "SIZE_LIMIT_EXCEEDED_MESSAGE": "Se excedió el límite de tamaño del archivo. Por favor, sube un archivo más pequeño.",
+    "LOGOUT_TRANSLATION_KEY": "Cerrar sesión"
 }
