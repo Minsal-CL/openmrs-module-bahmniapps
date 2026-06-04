@@ -36,6 +36,7 @@ import { decode as cborDecode } from "cbor-x";
 import pako from "pako";
 import QRCode from "qrcode";
 import {Html5Qrcode, Html5QrcodeSupportedFormats} from "html5-qrcode";
+import {ICVP_CONFIG, buildBasicAuth} from "../../config/icvpConfig";
 
 // Instancia AISLADA de axios para evitar que los interceptores globales de Bahmni
 // intercepten los errores y muestren diálogos de error en la UI de Bahmni.
@@ -49,22 +50,16 @@ const TIMEOUT_VHL  = 15000;
 
 const axiosIcvp = axios.create({ timeout: TIMEOUT_DOC });
 
+const {
+  REGIONAL_BASE,
+  VHL_ISSUANCE_URL,
+  VHL_RESOLVE_URL,
+  ICVP_FROM_BUNDLE_URL,
+} = ICVP_CONFIG;
 
 /* ===========================
    CONFIG ITI-67/68
    =========================== */
-// En producción, usa variables de entorno
-const REGIONAL_BASE = "https://10.68.174.206:5000/regional";
-const BASIC_USER = "mediator-proxy@openhim.org";
-const BASIC_PASS = "Lopior.123";
-const BASIC_AUTH =
-    "Basic " + (typeof btoa === "function" ? btoa(`${BASIC_USER}:${BASIC_PASS}`) : "");
-
-/* ===========================
-   CONFIG VHL (Mediator)
-   =========================== */
-const VHL_ISSUANCE_URL = "https://10.68.174.206:5000/vhl/_generate";
-const VHL_RESOLVE_URL = "https://10.68.174.206:5000/vhl/_resolve";
 
 /* ===========================
    DECODIFICACIÓN ICVP (HC1 Base45)
@@ -430,7 +425,6 @@ const renderIcvpMinPreview = (decoded) => {
    CONFIG ICVP (Mediator)
    =========================== */
 // Expuesto por OpenHIM (ajústalo si lo publicas en otro path)
-const ICVP_FROM_BUNDLE_URL = "https://10.68.174.206:5000/icvpcert/_from-bundle";
 
 // Perfiles para decidir el flujo
 const PROFILE_LAC_BUNDLE   = "http://lacpass.racsel.org/StructureDefinition/lac-bundle";
@@ -440,10 +434,12 @@ const PROFILE_ICVP_BUNDLE  = "http://smart.who.int/icvp/StructureDefinition/Bund
 
 
 // Headers con Basic Auth (por OpenHIM)
-const buildAuthHeaders = (accept = "application/fhir+json") => ({
-    Accept: accept,
-    Authorization: BASIC_AUTH,
-});
+const buildAuthHeaders = (accept = "application/fhir+json") => {
+    const headers = { Accept: accept };
+    const auth = buildBasicAuth();
+    if (auth) headers.Authorization = auth;
+    return headers;
+};
 
 // Une base + path cuidando slashes
 const joinUrl = (base, path) =>

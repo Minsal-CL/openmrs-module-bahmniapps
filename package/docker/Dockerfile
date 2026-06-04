@@ -8,6 +8,11 @@ COPY ui/app/images/bahmniLogoFull.png /usr/local/apache2/htdocs/bahmni-logo.png
 COPY package/docker/maintenance.html /usr/local/apache2/htdocs/
 COPY package/docker/unauthorized.html /usr/local/apache2/htdocs/
 COPY package/docker/style.css /usr/local/apache2/htdocs/
+COPY package/docker/generate-mfe-config.sh /usr/local/bin/generate-mfe-config.sh
+RUN chmod +x /usr/local/bin/generate-mfe-config.sh
 
 # Copy BahmniApps
 COPY ui/dist/. /usr/local/apache2/htdocs/bahmni/
+
+ENTRYPOINT ["/usr/local/bin/generate-mfe-config.sh"]
+CMD ["httpd-foreground"]

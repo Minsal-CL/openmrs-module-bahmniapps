@@ -1,9 +1,34 @@
 const path = require("path");
+const webpack = require("webpack");
+const dotenv = require("dotenv");
 const cssExtract = require("mini-css-extract-plugin");
 const ModuleFederationPlugin = require("webpack/lib/container/ModuleFederationPlugin");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const packageJson = require("./package.json");
 const dependencies = packageJson.dependencies;
+
+const envPath = path.resolve(__dirname, ".env");
+const envResult = dotenv.config({ path: envPath });
+const envValues = {
+  ...process.env,
+  ...(envResult.error ? {} : envResult.parsed),
+};
+
+const defineEnv = {
+  "process.env.ICVP_REGIONAL_BASE": JSON.stringify(envValues.ICVP_REGIONAL_BASE || ""),
+  "process.env.ICVP_BASIC_USER": JSON.stringify(envValues.ICVP_BASIC_USER || ""),
+  "process.env.ICVP_BASIC_PASS": JSON.stringify(envValues.ICVP_BASIC_PASS || ""),
+  "process.env.ICVP_VHL_ISSUANCE_URL": JSON.stringify(envValues.ICVP_VHL_ISSUANCE_URL || ""),
+  "process.env.ICVP_VHL_RESOLVE_URL": JSON.stringify(envValues.ICVP_VHL_RESOLVE_URL || ""),
+  "process.env.ICVP_FROM_BUNDLE_URL": JSON.stringify(envValues.ICVP_FROM_BUNDLE_URL || ""),
+  "process.env.ICVP_BASE": JSON.stringify(envValues.ICVP_BASE || ""),
+  "process.env.IPS_REGIONAL_BASE": JSON.stringify(envValues.IPS_REGIONAL_BASE || ""),
+  "process.env.IPS_BASIC_USER": JSON.stringify(envValues.IPS_BASIC_USER || ""),
+  "process.env.IPS_BASIC_PASS": JSON.stringify(envValues.IPS_BASIC_PASS || ""),
+  "process.env.IPS_VHL_ISSUANCE_URL": JSON.stringify(envValues.IPS_VHL_ISSUANCE_URL || ""),
+  "process.env.IPS_VHL_RESOLVE_URL": JSON.stringify(envValues.IPS_VHL_RESOLVE_URL || ""),
+  "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
+};
 
 module.exports = {
   resolve: {
@@ -28,6 +53,7 @@ module.exports = {
     new cssExtract({
       filename: "[name].min.css",
     }),
+    new webpack.DefinePlugin(defineEnv),
     new CopyWebpackPlugin({
       patterns: [{ from: "public", to: "../micro-frontends-dist/" }],
     }),

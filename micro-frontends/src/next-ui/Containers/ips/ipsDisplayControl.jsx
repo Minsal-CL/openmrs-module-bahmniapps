@@ -34,6 +34,7 @@ import {View16, QrCode32} from "@carbon/icons-react";
 import axios from "axios";
 import QRCode from "qrcode";
 import {Html5Qrcode, Html5QrcodeSupportedFormats} from "html5-qrcode";
+import {IPS_CONFIG, buildBasicAuth} from "../../config/ipsConfig";
 
 // Instancia AISLADA de axios para evitar que los interceptores globales de Bahmni
 // intercepten los errores y muestren diálogos de error en la UI de Bahmni.
@@ -50,24 +51,16 @@ const axiosIps = axios.create({ timeout: TIMEOUT_DOC });
 /* ===========================
    CONFIG ITI-67/68
    =========================== */
-// En producción, usa variables de entorno
-const REGIONAL_BASE = "https://10.68.174.206:5000/regional";
-const BASIC_USER = "mediator-proxy@openhim.org";
-const BASIC_PASS = "Lopior.123";
-const BASIC_AUTH =
-    "Basic " + (typeof btoa === "function" ? btoa(`${BASIC_USER}:${BASIC_PASS}`) : "");
-
-/* ===========================
-   CONFIG VHL (Mediator)
-   =========================== */
-const VHL_ISSUANCE_URL = "https://10.68.174.206:5000/vhl/_generate";
-const VHL_RESOLVE_URL = "https://10.68.174.206:5000/vhl/_resolve";
+// En producción, usa variables de entorno o window.__MFE_CONFIG__.
+const { REGIONAL_BASE, VHL_ISSUANCE_URL, VHL_RESOLVE_URL } = IPS_CONFIG;
 
 // Headers con Basic Auth (por OpenHIM)
-const buildAuthHeaders = (accept = "application/fhir+json") => ({
-    Accept: accept,
-    Authorization: BASIC_AUTH,
-});
+const buildAuthHeaders = (accept = "application/fhir+json") => {
+    const headers = {Accept: accept};
+    const auth = buildBasicAuth();
+    if (auth) headers.Authorization = auth;
+    return headers;
+};
 
 // Une base + path cuidando slashes
 const joinUrl = (base, path) =>

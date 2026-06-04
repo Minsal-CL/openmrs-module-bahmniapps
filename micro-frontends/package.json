@@ -17,6 +17,7 @@
     "bahmni-form-controls": "^0.93.12",
     "copy-webpack-plugin": "^11.0.0",
     "css-loader": "5.2.6",
+    "dotenv": "^16.3.1",
     "eslint": "^8.42.0",
     "eslint-config-prettier": "^8.8.0",
     "eslint-plugin-jest": "^27.2.1",
