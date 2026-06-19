@@ -14,14 +14,16 @@
 const globalCfg = (typeof window !== 'undefined' && window.__MFE_CONFIG__) || {};
 const DEFAULT_HOST = 'https://apiopenhim.nodonacionalph4h-dev.minsal.cl';
 const DEFAULT_REGIONAL_BASE = `${DEFAULT_HOST}/regional`;
+const IPS_BASIC_USER = 'mediator-proxy@openhim.org';
+const IPS_BASIC_PASS = 'Lopior.123';
 
 export const IPS_CONFIG = {
   REGIONAL_BASE:
     globalCfg.IPS_REGIONAL_BASE || process.env.IPS_REGIONAL_BASE || DEFAULT_REGIONAL_BASE,
   BASIC_USER:
-    globalCfg.IPS_BASIC_USER || process.env.IPS_BASIC_USER || '',
+    globalCfg.IPS_BASIC_USER || process.env.IPS_BASIC_USER || IPS_BASIC_USER,
   BASIC_PASS:
-    globalCfg.IPS_BASIC_PASS || process.env.IPS_BASIC_PASS || '',
+    globalCfg.IPS_BASIC_PASS || process.env.IPS_BASIC_PASS || IPS_BASIC_PASS,
   VHL_ISSUANCE_URL:
     globalCfg.IPS_VHL_ISSUANCE_URL || process.env.IPS_VHL_ISSUANCE_URL ||
     `${DEFAULT_HOST}/vhl/_generate`,
