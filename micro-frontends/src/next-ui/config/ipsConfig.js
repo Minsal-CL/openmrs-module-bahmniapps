@@ -30,6 +30,13 @@ export const IPS_CONFIG = {
     `${DEFAULT_HOST}/vhl/_resolve`,
 };
 
+console.log('IPS_CONFIG check', {
+  hasUser: !!IPS_CONFIG.BASIC_USER,
+  hasPass: !!IPS_CONFIG.BASIC_PASS,
+  userLen: IPS_CONFIG.BASIC_USER?.length,
+  passLen: IPS_CONFIG.BASIC_PASS?.length
+});
+
 export function buildBasicAuth() {
   const { BASIC_USER, BASIC_PASS } = IPS_CONFIG;
   if (!BASIC_USER || !BASIC_PASS || typeof btoa !== 'function') {
