@@ -138,7 +138,7 @@ const fetchDocumentReferences = async (patientIdentifier) => {
     for (let count = STEP; count <= MAX_COUNT; count += STEP) {
         const url =
             `${REGIONAL_BASE}/DocumentReference` +
-            `?patient.identifier=${encodeURIComponent(ensured)}&_count=${count}&type=60591-5&_sort=-_lastUpdated`;
+            `?patient.identifier=${encodeURIComponent(ensured)}&_count=${count}&type=60591-5&category:not=11369-6&_sort=-_lastUpdated`;
 
         let res;
             console.log('axiosIps IPS ITI-67 GET', url);
