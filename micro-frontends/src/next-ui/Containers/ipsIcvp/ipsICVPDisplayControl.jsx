@@ -502,7 +502,7 @@ const fetchDocumentReferences = async (patientIdentifier) => {
     for (let count = STEP; count <= MAX_COUNT; count += STEP) {
         const url =
             `${REGIONAL_BASE}/DocumentReference` +
-            `?patient.identifier=${encodeURIComponent(ensured)}&_count=${count}`;
+            `?patient.identifier=${encodeURIComponent(ensured)}&_count=${count}&type=60591-5&category=11369-6&_sort=-_lastUpdated`;
 
         let res;
         try {
