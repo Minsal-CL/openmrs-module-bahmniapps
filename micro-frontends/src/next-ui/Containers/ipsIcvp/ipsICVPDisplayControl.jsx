@@ -1409,7 +1409,7 @@ export function IpsIcvpDisplayControl(props) {
 
                     {/* Leer VHL: abre modal para pegar/escanner y resolver */}
                     <Button kind="primary" renderIcon={QrCode32} onClick={handleOpenVhlReader}>
-                        <FormattedMessage id="READ_VHL_DOCUMENT" defaultMessage="Leer QR"/>
+                        <FormattedMessage id="READ_ICVP_DOCUMENT" defaultMessage="Leer QR"/>
                     </Button>
                 </div>
 
