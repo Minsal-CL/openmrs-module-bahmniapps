@@ -7,6 +7,8 @@ import {OtNotesSavePopup, OtNotesDeletePopup} from "./Containers/otNotes/OtNotes
 import {VacunasDisplayControl} from "./Containers/vacunasDisplayControl/VacunasDisplayControl";
 import {IpsDisplayControl} from "./Containers/ips/ipsDisplayControl";
 import {IpsIcvpDisplayControl} from "./Containers/ipsIcvp/ipsICVPDisplayControl";
+import {ServiceRequestDisplayControl} from "./Containers/serviceRequestDash/serviceRequestDisplayControl";
+import {MedicationStatementDisplayControl} from "./Containers/medicationStatementDash/medicationStatementDisplayControl";
 import {LaboratoryOrdersControl} from "./Containers/LaboratoryOrders/LaboratoryOrdersControl";
 import {MedicationOrdersControl} from "./Containers/MedicationOrders/MedicationOrdersControl";
 import {ImagingOrdersControl} from "./Containers/ImagingOrders/ImagingOrdersControl";
@@ -61,6 +63,16 @@ builder.createComponentWithTranslationForwarding(
 builder.createComponentWithTranslationForwarding(
     "IpsIcvpDisplayControl",
     IpsIcvpDisplayControl
+);
+
+builder.createComponentWithTranslationForwarding(
+    "ServiceRequestDisplayControl",
+    ServiceRequestDisplayControl
+);
+
+builder.createComponentWithTranslationForwarding(
+    "MedicationStatementDisplayControl",
+    MedicationStatementDisplayControl
 );
 
 builder.createComponentWithTranslationForwarding(

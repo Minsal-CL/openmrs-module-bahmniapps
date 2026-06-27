@@ -27,6 +27,8 @@
         "vacunasReact",
         "ipsReact",
         "ipsIcvpReact",
+        "serviceRequestReact",
+        "medicationStatementReact",
         "allOrdersReact"
     ];
 

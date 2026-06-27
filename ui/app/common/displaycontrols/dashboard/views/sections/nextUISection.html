@@ -13,6 +13,18 @@
         host-api="ipsApi"
         app-service="appService">
 </mfe-next-ui-ips-icvp-display-control>
+<mfe-next-ui-service-request-display-control
+        ng-if="::(section.type === 'serviceRequestReact')"
+        host-data="ipsData"
+        host-api="ipsApi"
+        app-service="appService">
+</mfe-next-ui-service-request-display-control>
+<mfe-next-ui-medication-statement-display-control
+        ng-if="::(section.type === 'medicationStatementReact')"
+        host-data="ipsData"
+        host-api="ipsApi"
+        app-service="appService">
+</mfe-next-ui-medication-statement-display-control>
 <mfe-next-ui-all-orders-dashboard
         ng-if="::(section.type === 'allOrdersReact')"
         host-data="allOrdersData"
