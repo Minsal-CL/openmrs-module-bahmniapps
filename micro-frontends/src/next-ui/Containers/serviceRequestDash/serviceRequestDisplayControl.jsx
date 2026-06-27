@@ -9,6 +9,16 @@ import "./serviceRequestDisplayControl.scss";
 // Instancia aislada para no arrastrar interceptores globales de Bahmni
 const axiosSR = axios.create({ timeout: 20000 });
 
+const TITLE = "Interconsultas Transfronterizas";
+
+// Convierte una referencia relativa (ej. "Bundle/2366") en URL absoluta al NN para que el link
+// no se resuelva contra la URL de la app Bahmni.
+const absUrl = (ref) => {
+  if (!ref) return null;
+  if (/^https?:\/\//i.test(ref)) return ref;
+  return `${NODES_CONFIG.NATIONAL_FHIR_BASE}/${String(ref).replace(/^\//, "")}`;
+};
+
 // Document-based (igual que IPS): DocumentReference (type 11488-4) -> Bundle -> ServiceRequest[]
 const fetchServiceRequests = async (identifier) =>
   fetchResourcesFromDocs(axiosSR, identifier, DOC_TYPE.INTERCONSULTA, "ServiceRequest");
@@ -57,53 +67,58 @@ export function ServiceRequestDisplayControl(props) {
     finally { setBusyId(null); }
   };
 
-  if (loading) return <div className="sr-dash sr-dash--msg">Cargando interconsultas…</div>;
-  if (error) return <div className="sr-dash sr-dash--error">⚠️ {error}</div>;
-  if (!items.length) return <div className="sr-dash sr-dash--msg">Sin interconsultas para este paciente.</div>;
+  let body;
+  if (loading) body = <div className="sr-dash__msg">Cargando interconsultas…</div>;
+  else if (error) body = <div className="sr-dash__error">⚠️ {error}</div>;
+  else if (!items.length) body = <div className="sr-dash__msg">Sin interconsultas para este paciente.</div>;
+  else body = (
+    <table className="sr-table">
+      <thead>
+        <tr>
+          <th>Estado</th>
+          <th>Especialidad</th>
+          <th>Destino</th>
+          <th>Motivo</th>
+          <th>Fecha</th>
+          <th>IPS</th>
+          <th>Documento</th>
+          <th aria-label="acciones" />
+        </tr>
+      </thead>
+      <tbody>
+        {items.map(({ resource: sr, bundleUrl }) => {
+          const ips = absUrl(sr.supportingInfo && sr.supportingInfo[0] && sr.supportingInfo[0].reference);
+          return (
+            <tr key={sr.id}>
+              <td><span className={`sr-status sr-status--${sr.status}`}>{sr.status}</span></td>
+              <td>{(sr.code && sr.code.text) || "—"}</td>
+              <td>{destinationOf(sr)}</td>
+              <td>{(sr.reasonCode && sr.reasonCode[0] && sr.reasonCode[0].text) || "—"}</td>
+              <td>{(sr.authoredOn || "").slice(0, 10) || "—"}</td>
+              <td>{ips ? <a href={`${ips}?_pretty=true`} target="_blank" rel="noreferrer">Ver IPS</a> : "—"}</td>
+              <td>{bundleUrl ? <a href={`${bundleUrl}?_pretty=true`} target="_blank" rel="noreferrer">Bundle</a> : "—"}</td>
+              <td>
+                {sr.status === "active" ? (
+                  <button
+                    className="sr-btn-complete"
+                    disabled={busyId === sr.id}
+                    onClick={() => onComplete(sr)}
+                  >
+                    {busyId === sr.id ? "…" : "Completar"}
+                  </button>
+                ) : null}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
 
   return (
     <div className="sr-dash">
-      <table className="sr-table">
-        <thead>
-          <tr>
-            <th>Estado</th>
-            <th>Especialidad</th>
-            <th>Destino</th>
-            <th>Motivo</th>
-            <th>Fecha</th>
-            <th>IPS</th>
-            <th>Documento</th>
-            <th aria-label="acciones" />
-          </tr>
-        </thead>
-        <tbody>
-          {items.map(({ resource: sr, bundleUrl }) => {
-            const ips = sr.supportingInfo && sr.supportingInfo[0] && sr.supportingInfo[0].reference;
-            return (
-              <tr key={sr.id}>
-                <td><span className={`sr-status sr-status--${sr.status}`}>{sr.status}</span></td>
-                <td>{(sr.code && sr.code.text) || "—"}</td>
-                <td>{destinationOf(sr)}</td>
-                <td>{(sr.reasonCode && sr.reasonCode[0] && sr.reasonCode[0].text) || "—"}</td>
-                <td>{(sr.authoredOn || "").slice(0, 10) || "—"}</td>
-                <td>{ips ? <a href={ips} target="_blank" rel="noreferrer">Ver IPS</a> : "—"}</td>
-                <td>{bundleUrl ? <a href={`${bundleUrl}?_pretty=true`} target="_blank" rel="noreferrer">Bundle</a> : "—"}</td>
-                <td>
-                  {sr.status === "active" ? (
-                    <button
-                      className="sr-btn-complete"
-                      disabled={busyId === sr.id}
-                      onClick={() => onComplete(sr)}
-                    >
-                      {busyId === sr.id ? "…" : "Completar"}
-                    </button>
-                  ) : null}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <h3 className="sr-dash__title">{TITLE}</h3>
+      {body}
     </div>
   );
 }
