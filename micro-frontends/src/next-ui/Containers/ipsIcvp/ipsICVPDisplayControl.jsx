@@ -1409,7 +1409,7 @@ export function IpsIcvpDisplayControl(props) {
 
                     {/* Leer VHL: abre modal para pegar/escanner y resolver */}
                     <Button kind="primary" renderIcon={QrCode32} onClick={handleOpenVhlReader}>
-                        <FormattedMessage id="READ_VHL_DOCUMENT" defaultMessage="Leer QR"/>
+                        <FormattedMessage id="READ_ICVP_DOCUMENT" defaultMessage="Leer QR"/>
                     </Button>
                 </div>
 
@@ -1601,10 +1601,10 @@ export function IpsIcvpDisplayControl(props) {
                                         <Button kind="primary" size="sm" onClick={handleResolveVHL} disabled={resolveLoading}>
                                             {resolveLoading ? (
                                                 <InlineLoading
-                                                    description={t("RESOLVING_VHL", "Resolviendo VHL...")}
+                                                    description={t("RESOLVING_ICVP", "Resolviendo ICVP...")}
                                                 />
                                             ) : (
-                                                <FormattedMessage id="RESOLVE_VHL" defaultMessage="Resolver VHL"/>
+                                                <FormattedMessage id="RESOLVE_ICVP" defaultMessage="Resolver ICVP"/>
                                             )}
                                         </Button>
                                         {resolveError && (
