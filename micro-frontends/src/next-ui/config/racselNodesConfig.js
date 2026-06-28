@@ -15,11 +15,15 @@ const globalCfg = (typeof window !== 'undefined' && window.__MFE_CONFIG__) || {}
 const env = (typeof process !== 'undefined' && process.env) || {};
 
 const DEFAULT_NATIONAL_FHIR_BASE = 'https://hapinacional.nodonacionalph4h-dev.minsal.cl/fhir';
+const DEFAULT_RESOURCE_FHIR_BASE = 'https://hapilocal.nodonacionalph4h-dev.minsal.cl/fhir';
 
 export const NODES_CONFIG = {
-  // Nodo Nacional propio (Paso 2 / documentos MHD y recursos cross-border)
+  // Nodo Nacional propio (lectura de documentos MHD: DocumentReference + Bundle)
   NATIONAL_FHIR_BASE:
     (globalCfg.RACSEL_NATIONAL_FHIR_BASE || env.RACSEL_NATIONAL_FHIR_BASE || DEFAULT_NATIONAL_FHIR_BASE).replace(/\/$/, ''),
+  // Nodo de RECURSOS clínicos sueltos (hapilocal) — para escribir/actualizar (ej. completar un ServiceRequest)
+  RESOURCE_FHIR_BASE:
+    (globalCfg.RACSEL_RESOURCE_FHIR_BASE || env.RACSEL_RESOURCE_FHIR_BASE || DEFAULT_RESOURCE_FHIR_BASE).replace(/\/$/, ''),
   BASIC_USER: globalCfg.RACSEL_BASIC_USER || env.RACSEL_BASIC_USER || '',
   BASIC_PASS: globalCfg.RACSEL_BASIC_PASS || env.RACSEL_BASIC_PASS || '',
   // Rutas a NN de otros países (placeholder multi-nodo). Clave = código país (ISO alpha-2).
@@ -52,6 +56,23 @@ export const DOC_TYPE = {
   INTERCONSULTA: '11488-4',      // LACCompositionIT  (Consultation note)
   MEDICATION_REPORT: '56445-0',  // LACCompositionMeOw (Medication summary)
 };
+
+// Flujo RESOURCE-based: la interconsulta viaja como ServiceRequest suelto (LACServiceRequestIT),
+// NO como documento. Se consulta el recurso vivo en el NN para reflejar el estado (active/completed)
+// que muta con el PUT de "Completar" (Track 1.2-G). Devuelve [{ resource }].
+export async function fetchServiceRequestsByPatient(axiosInst, identifier) {
+  const base = NODES_CONFIG.NATIONAL_FHIR_BASE;
+  const id = cleanIdentifier(identifier);
+  if (!id) return [];
+  const url =
+    `${base}/ServiceRequest?patient.identifier=${encodeURIComponent(id)}` +
+    `&_sort=-authoredOn&_count=50`;
+  const res = await axiosInst.get(url, { headers: buildAuthHeaders() });
+  return (res.data && res.data.entry ? res.data.entry : [])
+    .map((e) => e.resource)
+    .filter((r) => r && r.resourceType === 'ServiceRequest')
+    .map((r) => ({ resource: r }));
+}
 
 // Flujo document-based (igual que el dashboard IPS): consulta DocumentReference por
 // patient.identifier + type en el NN, baja cada Bundle (content.attachment.url) y extrae

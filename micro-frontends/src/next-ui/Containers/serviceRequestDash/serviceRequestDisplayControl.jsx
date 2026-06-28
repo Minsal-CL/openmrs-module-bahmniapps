@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import PropTypes from "prop-types";
 import axios from "axios";
 import {
-  NODES_CONFIG, buildAuthHeaders, fetchResourcesFromDocs, DOC_TYPE,
+  NODES_CONFIG, buildAuthHeaders, fetchServiceRequestsByPatient,
 } from "../../config/racselNodesConfig";
 import "./serviceRequestDisplayControl.scss";
 
@@ -19,14 +19,24 @@ const absUrl = (ref) => {
   return `${NODES_CONFIG.NATIONAL_FHIR_BASE}/${String(ref).replace(/^\//, "")}`;
 };
 
-// Document-based (igual que IPS): DocumentReference (type 11488-4) -> Bundle -> ServiceRequest[]
+// Resource-based: la interconsulta es un ServiceRequest suelto (LACServiceRequestIT) en el NN.
+// Se lee el recurso vivo para que el estado refleje el PUT de "Completar" (Track 1.2-G).
 const fetchServiceRequests = async (identifier) =>
-  fetchResourcesFromDocs(axiosSR, identifier, DOC_TYPE.INTERCONSULTA, "ServiceRequest");
+  fetchServiceRequestsByPatient(axiosSR, identifier);
 
-// T1.2-G: completar la solicitud -> PUT con status "completed" en el Nodo Nacional
+// T1.2-G: completar la solicitud -> PUT con status "completed" en el NODO NACIONAL
+// (el mediador registra el SR suelto también ahí; el track dice PUT a <NN País A>).
 const completeServiceRequest = async (sr) => {
   const base = NODES_CONFIG.NATIONAL_FHIR_BASE;
-  const updated = { ...sr, status: "completed" };
+  // Quitamos meta de versión/origen (provoca 400 al re-PUT) conservando el profile,
+  // y dejamos supportingInfo (IPS) como URL absoluta.
+  const { meta, ...rest } = sr;
+  const cleanMeta = meta && meta.profile ? { profile: meta.profile } : undefined;
+  const updated = { ...rest, ...(cleanMeta ? { meta: cleanMeta } : {}), status: "completed" };
+  if (Array.isArray(updated.supportingInfo)) {
+    updated.supportingInfo = updated.supportingInfo.map((si) =>
+      si && si.reference ? { ...si, reference: absUrl(si.reference) } : si);
+  }
   const url = `${base}/ServiceRequest/${sr.id}`;
   await axiosSR.put(url, updated, {
     headers: { ...buildAuthHeaders(), "Content-Type": "application/fhir+json" },
@@ -45,7 +55,7 @@ const destinationOf = (sr) => {
 export function ServiceRequestDisplayControl(props) {
   const { hostData } = props;
   const { identifier } = hostData || {};
-  const [items, setItems] = useState([]); // [{resource, docRef, bundleUrl}]
+  const [items, setItems] = useState([]); // [{resource}] (ServiceRequest suelto del NN)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -63,7 +73,12 @@ export function ServiceRequestDisplayControl(props) {
   const onComplete = async (sr) => {
     setBusyId(sr.id); setError(null);
     try { await completeServiceRequest(sr); await load(); }
-    catch (e) { setError(e && e.message ? e.message : "No se pudo completar la solicitud"); }
+    catch (e) {
+      const oo = e && e.response && e.response.data;
+      const issue = oo && oo.issue && oo.issue[0];
+      const diag = issue && (issue.diagnostics || (issue.details && issue.details.text));
+      setError(diag || (e && e.message) || "No se pudo completar la solicitud");
+    }
     finally { setBusyId(null); }
   };
 
@@ -81,12 +96,11 @@ export function ServiceRequestDisplayControl(props) {
           <th>Motivo</th>
           <th>Fecha</th>
           <th>IPS</th>
-          <th>Documento</th>
           <th aria-label="acciones" />
         </tr>
       </thead>
       <tbody>
-        {items.map(({ resource: sr, bundleUrl }) => {
+        {items.map(({ resource: sr }) => {
           const ips = absUrl(sr.supportingInfo && sr.supportingInfo[0] && sr.supportingInfo[0].reference);
           return (
             <tr key={sr.id}>
@@ -96,7 +110,6 @@ export function ServiceRequestDisplayControl(props) {
               <td>{(sr.reasonCode && sr.reasonCode[0] && sr.reasonCode[0].text) || "—"}</td>
               <td>{(sr.authoredOn || "").slice(0, 10) || "—"}</td>
               <td>{ips ? <a href={`${ips}?_pretty=true`} target="_blank" rel="noreferrer">Ver IPS</a> : "—"}</td>
-              <td>{bundleUrl ? <a href={`${bundleUrl}?_pretty=true`} target="_blank" rel="noreferrer">Bundle</a> : "—"}</td>
               <td>
                 {sr.status === "active" ? (
                   <button
