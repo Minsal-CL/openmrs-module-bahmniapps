@@ -81,7 +81,7 @@ export async function fetchServiceRequestsByPatient(axiosInst, identifier) {
   if (!id) return [];
   const url =
     `${base}/ServiceRequest?patient.identifier=${encodeURIComponent(id)}` +
-    `&_sort=-authoredOn&_count=50`;
+    `&_sort=-authored&_count=50`;
   const res = await axiosInst.get(url, { headers: buildAuthHeaders() });
   return (res.data && res.data.entry ? res.data.entry : [])
     .map((e) => e.resource)
@@ -133,7 +133,7 @@ export async function fetchServiceRequestsAllNodes(axiosInst, identifier) {
   if (!id) return [];
   const nodes = listNodes();
   const perNode = await Promise.all(nodes.map(async (node) => {
-    const url = `${node.base}/ServiceRequest?patient.identifier=${encodeURIComponent(id)}&_sort=-authoredOn&_count=50`;
+    const url = `${node.base}/ServiceRequest?patient.identifier=${encodeURIComponent(id)}&_sort=-authored&_count=50`;
     try {
       const res = await axiosInst.get(url, { headers: buildAuthHeaders() });
       return (res.data && res.data.entry ? res.data.entry : [])
