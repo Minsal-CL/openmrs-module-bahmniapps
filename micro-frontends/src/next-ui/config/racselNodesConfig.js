@@ -28,6 +28,11 @@ export const NODES_CONFIG = {
   BASIC_PASS: globalCfg.RACSEL_BASIC_PASS || env.RACSEL_BASIC_PASS || '',
   // País propio (ISO alpha-2) del nodo nacional local.
   OWN_COUNTRY: globalCfg.RACSEL_OWN_COUNTRY || env.RACSEL_OWN_COUNTRY || 'CL',
+  // Endpoint del mediador de contrarreferencia (arma el MHD). El dashboard le manda {narrativa, srRef, paciente}.
+  // Ajustar a la URL pública real del OpenHIM que rutea al mediador 8020.
+  CONTRARREF_ENDPOINT:
+    (globalCfg.RACSEL_CONTRARREF_ENDPOINT || env.RACSEL_CONTRARREF_ENDPOINT ||
+     'https://apiopenhim.nodonacionalph4h-dev.minsal.cl/forwardercontrarreferencia/_answer').replace(/\/$/, ''),
   // Rutas a NN de otros países. Clave = código país (ISO alpha-2), valor = base FHIR (…/fhir).
   // Ej: { "PA": "https://hapinacional-panama/fhir", "UY": "https://nn-uy/fhir" }.
   // Se agrega un país nuevo simplemente añadiendo su URL aquí (o vía RACSEL_COUNTRY_ROUTES en runtime).
@@ -188,109 +193,16 @@ export async function completeServiceRequestOnNode(axiosInst, sr, base) {
 }
 
 // ============================================================================
-// CONTRARREFERENCIA (respuesta) — arma y POSTea el documento MHD LACBundleTransactionMHDIT
-// SIN encounter: el dashboard construye el documento y lo envía (ITI-65) al nodo propio.
-// NOTA: esto DEBE mantenerse en sync con fhir-forwarder-contrarreferencia-mediator/index.js
-// (mismo IG). Perfiles variante IT y sección 55112-7 "Resultado de la Evaluación".
+// CONTRARREFERENCIA (respuesta) — se DELEGA al mediador 8020 por la complejidad del MHD.
+// El dashboard NO arma el documento: manda { narrativa, srRef, paciente } al endpoint del mediador,
+// y el mediador construye y POSTea el LACBundleTransactionMHDIT (ITI-65) al nodo nacional.
 // ============================================================================
-const CR_PROFILES = {
-  COMP: 'http://racsel.org/StructureDefinition/LACCompositionIT',
-  DOCBNDL: 'http://racsel.org/StructureDefinition/LACBundleDocIT',
-  DOCREF: 'http://racsel.org/StructureDefinition/LACDocReferenceIT',
-  TXBNDL: 'http://racsel.org/StructureDefinition/LACBundleTransactionMHDIT',
-  ORG: 'http://racsel.org/StructureDefinition/LACOrganization',
-};
-const CR_COMP_TYPE = { system: 'http://loinc.org', code: '11488-4', display: 'Consultation note' };
-const CR_SECTION_CODE = { system: 'http://loinc.org', code: '55112-7', display: 'Document summary' };
-const CR_SECTION_TITLE = 'Resultado de la Evaluación';
-const CR_MASTER_ID_SYSTEM = 'urn:ietf:rfc:3986';
-
-function uuidUrn() {
-  const g = (typeof crypto !== 'undefined' && crypto.randomUUID)
-    ? crypto.randomUUID()
-    : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-      const r = (Math.random() * 16) | 0; const v = c === 'x' ? r : (r & 0x3) | 0x8; return v.toString(16);
-    });
-  return `urn:uuid:${g}`;
-}
-
-// Asegura un Patient (con el identifier) en el nodo destino, para que el documento sea
-// consultable por patient.identifier. Devuelve el recurso Patient a embeber en el documento.
-export async function ensurePatientOnNode(axiosInst, base, identifier, patientUuid) {
-  const id = cleanIdentifier(identifier);
-  try {
-    const res = await axiosInst.get(
-      `${base}/Patient?identifier=${encodeURIComponent(id)}&_count=1`, { headers: buildAuthHeaders() });
-    const p = (res.data && res.data.entry ? res.data.entry : []).map((e) => e.resource)
-      .find((r) => r && r.resourceType === 'Patient');
-    if (p) return p;
-  } catch (e) { /* sigue al fallback */ }
-  const minimal = { resourceType: 'Patient', id: patientUuid || (uuidUrn().slice(9)), identifier: [{ value: id }] };
-  try {
-    await axiosInst.put(`${base}/Patient/${minimal.id}`, minimal, {
-      headers: { ...buildAuthHeaders(), 'Content-Type': 'application/fhir+json' } });
-  } catch (e) { /* best-effort */ }
-  return minimal;
-}
-
-// Construye la transacción MHD (LACBundleTransactionMHDIT) con la contrarreferencia embebida.
-export function buildContrarreferenciaMhd({ patient, narrative, srRef, date, authorOrgName, authorOrgCountry }) {
-  const patientUrl = `Patient/${patient.id}`;
-  const authorUrl = uuidUrn(), compUrl = uuidUrn(), docBundleUrl = uuidUrn(), docRefUrl = uuidUrn(), listUrl = uuidUrn();
-  const authorOrg = {
-    resourceType: 'Organization', meta: { profile: [CR_PROFILES.ORG] },
-    name: authorOrgName || 'Hospital Clínico San Borja Arriarán',
-    address: [{ country: authorOrgCountry || NODES_CONFIG.OWN_COUNTRY }],
-  };
-  const div = `<div xmlns="http://www.w3.org/1999/xhtml">${String(narrative || '').replace(/[<>&]/g, '')}</div>`;
-  const composition = {
-    resourceType: 'Composition', meta: { profile: [CR_PROFILES.COMP] }, status: 'final',
-    type: { coding: [CR_COMP_TYPE], text: CR_COMP_TYPE.display },
-    subject: { reference: patientUrl }, date, author: [{ reference: authorUrl }], title: 'Contrarreferencia',
-    ...(srRef ? { event: [{ detail: [{ reference: srRef }] }] } : {}),
-    section: [{
-      title: CR_SECTION_TITLE, code: { coding: [CR_SECTION_CODE] },
-      text: { status: 'generated', div },
-      ...(srRef ? { entry: [{ reference: srRef }] } : {}),
-    }],
-  };
-  const docBundle = {
-    resourceType: 'Bundle', meta: { profile: [CR_PROFILES.DOCBNDL] }, type: 'document',
-    identifier: { system: CR_MASTER_ID_SYSTEM, value: docBundleUrl }, timestamp: date,
-    entry: [
-      { fullUrl: compUrl, resource: composition },
-      { fullUrl: authorUrl, resource: authorOrg },
-      { fullUrl: patientUrl, resource: patient },
-    ],
-  };
-  const docRef = {
-    resourceType: 'DocumentReference', meta: { profile: [CR_PROFILES.DOCREF] },
-    masterIdentifier: { system: CR_MASTER_ID_SYSTEM, value: docBundleUrl },
-    status: 'current', type: { coding: [CR_COMP_TYPE] }, subject: { reference: `Patient/${patient.id}` }, date,
-    ...(srRef ? { context: { related: [{ reference: srRef }] } } : {}),
-    content: [{ attachment: { contentType: 'application/fhir+json', url: docBundleUrl } }],
-  };
-  const list = {
-    resourceType: 'List', status: 'current', mode: 'working', date,
-    entry: [{ item: { reference: docRefUrl } }],
-  };
-  return {
-    resourceType: 'Bundle', meta: { profile: [CR_PROFILES.TXBNDL] }, type: 'transaction',
-    entry: [
-      { fullUrl: listUrl, resource: list, request: { method: 'POST', url: 'List' } },
-      { fullUrl: docRefUrl, resource: docRef, request: { method: 'POST', url: 'DocumentReference' } },
-      { fullUrl: docBundleUrl, resource: docBundle, request: { method: 'POST', url: 'Bundle' } },
-    ],
-  };
-}
-
-// Envía la contrarreferencia: asegura el Patient, arma el MHD y lo POSTea (ITI-65) al nodo propio.
-export async function submitContrarreferencia(axiosInst, { identifier, patientUuid, narrative, srRef, base }) {
-  const target = (base || NODES_CONFIG.NATIONAL_FHIR_BASE).replace(/\/$/, '');
-  const patient = await ensurePatientOnNode(axiosInst, target, identifier, patientUuid);
-  const tx = buildContrarreferenciaMhd({ patient, narrative, srRef, date: new Date().toISOString() });
-  await axiosInst.post(target, tx, {
-    headers: { ...buildAuthHeaders(), 'Content-Type': 'application/fhir+json' },
+export async function submitContrarreferencia(axiosInst, { identifier, patientUuid, narrative, srRef }) {
+  const endpoint = NODES_CONFIG.CONTRARREF_ENDPOINT;
+  if (!endpoint) throw new Error('Endpoint de contrarreferencia no configurado (RACSEL_CONTRARREF_ENDPOINT)');
+  const body = { patientUuid, identifier: cleanIdentifier(identifier), narrative, srRef };
+  await axiosInst.post(endpoint, body, {
+    headers: { ...buildAuthHeaders('application/json'), 'Content-Type': 'application/json' },
   });
 }
 
