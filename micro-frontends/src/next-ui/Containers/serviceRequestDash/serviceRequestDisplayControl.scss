@@ -138,8 +138,41 @@
     width: min(520px, 92vw);
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
     font-size: 13px;
+    &--wide { width: min(760px, 95vw); }
+  }
+  &__body { max-height: 72vh; overflow-y: auto; padding-right: 4px; }
+  &__msg { color: #555; padding: 6px 0; }
+  &__close {
+    float: right; border: none; background: none; cursor: pointer;
+    font-size: 20px; line-height: 1; color: #888; padding: 0 2px;
+    &:hover { color: #333; }
   }
   &__title { font-weight: 600; color: #2c3e50; margin-bottom: 10px; font-size: 14px; }
+
+  .sr-form { margin-bottom: 12px; }
+  .sr-form__row {
+    display: flex; gap: 10px; padding: 5px 0; border-bottom: 1px solid #eee;
+    span { flex: 0 0 130px; color: #777; }
+    b { color: #222; font-weight: 600; }
+  }
+  .sr-form__sectitle {
+    font-weight: 600; color: #1565c0; margin: 14px 0 6px;
+    border-bottom: 2px solid #1565c0; padding-bottom: 4px;
+  }
+  .sr-ips__pat { color: #555; margin-bottom: 8px; }
+  .sr-ips-sec { margin-bottom: 10px; }
+  .sr-ips-sec__title { font-weight: 600; color: #2c3e50; }
+  .sr-ips-sec__text { white-space: pre-wrap; color: #222; }
+
+  .sr-ips-grp {
+    margin: 10px 0;
+    &__title { font-weight: 600; color: #2c3e50; }
+    &__count { color: #999; font-weight: 400; }
+    &__list {
+      margin: 4px 0 0; padding-left: 18px;
+      li { color: #222; padding: 1px 0; }
+    }
+  }
   &__label { display: block; margin-bottom: 4px; color: #333; font-weight: 600; }
   &__text {
     width: 100%;

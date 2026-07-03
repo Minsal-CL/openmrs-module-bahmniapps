@@ -150,10 +150,11 @@ export async function fetchServiceRequestsAllNodes(axiosInst, identifier) {
   return perNode.flat();
 }
 
-// MULTI-NODO: consulta las contrarreferencias (DocumentReference type 11488-4) en CADA nodo.
-// Así vemos tanto nuestras respuestas como las que otros países dieron a nuestras interconsultas.
+// MULTI-NODO: consulta las contrarreferencias en CADA nodo. Busca AMBOS types del documento de
+// respuesta: 11488-4 (Consultation note, builder viejo) y 57133-1 (Referral note, mediador actual),
+// porque distintos flujos estamparon distinto type en el DocumentReference. Comma = OR en FHIR.
 // Devuelve [{ docRef, bundleUrl, relatedRefs, date, node }].
-export async function fetchResponseDocsAllNodes(axiosInst, identifier, typeCode = DOC_TYPE.INTERCONSULTA) {
+export async function fetchResponseDocsAllNodes(axiosInst, identifier, typeCode = '11488-4,57133-1') {
   const id = cleanIdentifier(identifier);
   if (!id) return [];
   const nodes = listNodes();
@@ -190,6 +191,52 @@ export async function completeServiceRequestOnNode(axiosInst, sr, base) {
   await axiosInst.put(url, updated, {
     headers: { ...buildAuthHeaders(), 'Content-Type': 'application/fhir+json' },
   });
+}
+
+// Lee un Bundle IPS y devuelve un resumen legible del MISMO bundle referenciado por la interconsulta:
+// secciones narrativas + recursos estructurados (condiciones, medicamentos, alergias, inmunizaciones).
+export async function fetchIpsSummary(axiosInst, bundleUrl) {
+  if (!bundleUrl) return null;
+  const res = await axiosInst.get(bundleUrl, { headers: buildAuthHeaders() });
+  const entries = (res.data && res.data.entry) ? res.data.entry : [];
+  const resources = entries.map((e) => e.resource).filter(Boolean);
+  const byType = (t) => resources.filter((r) => r.resourceType === t);
+  const strip = (html) => String(html || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const cc = (x) => (x && (x.text
+    || (Array.isArray(x.coding) && x.coding[0] && (x.coding[0].display || x.coding[0].code)))) || '';
+  const day = (d) => (d ? String(d).slice(0, 10) : '');
+
+  const comp = byType('Composition')[0];
+  const patient = byType('Patient')[0];
+  const sections = ((comp && comp.section) || [])
+    .map((s) => ({ title: s.title || cc(s.code) || 'Sección', text: strip(s.text && s.text.div) }))
+    .filter((s) => s.text);
+
+  const conditions = byType('Condition').map((r) => ({
+    text: cc(r.code) || '—',
+    status: cc(r.clinicalStatus) || cc(r.verificationStatus),
+    date: day(r.onsetDateTime || r.recordedDate),
+  }));
+  const medications = [...byType('MedicationStatement'), ...byType('MedicationRequest')].map((r) => ({
+    text: cc(r.medicationCodeableConcept) || (r.medicationReference && r.medicationReference.display) || '—',
+    status: r.status || '',
+    dose: (Array.isArray(r.dosage) && r.dosage[0] && r.dosage[0].text) || '',
+  }));
+  const allergies = byType('AllergyIntolerance').map((r) => ({
+    text: cc(r.code) || '—',
+    detail: [r.criticality, cc(r.clinicalStatus)].filter(Boolean).join(' · '),
+  }));
+  const immunizations = byType('Immunization').map((r) => ({
+    text: cc(r.vaccineCode) || '—',
+    detail: [day(r.occurrenceDateTime), r.status].filter(Boolean).join(' · '),
+  }));
+
+  const n = patient && patient.name && patient.name[0];
+  const patientName = n ? [(n.given || []).join(' '), n.family].filter(Boolean).join(' ') : '';
+  return {
+    title: (comp && comp.title) || 'IPS', patientName, sections,
+    conditions, medications, allergies, immunizations,
+  };
 }
 
 // ============================================================================
