@@ -227,11 +227,6 @@ function MedicationStatementDisplayControlInner(props) {
 
       const scanner = new Html5Qrcode(READER_REGION_ID, {
         formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        // El QR de MeOw (HC1) es muy denso (payload CBOR/Base45 largo): el decoder JS puro
-        // falla seguido con cámaras web a baja resolución. El BarcodeDetector nativo del
-        // navegador (Chrome/Edge) es mucho más robusto para códigos densos; si el browser
-        // no lo soporta, html5-qrcode cae automáticamente al decoder JS de siempre.
-        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         verbose: false,
       });
       scannerRef.current = scanner;
@@ -242,12 +237,7 @@ function MedicationStatementDisplayControlInner(props) {
       const deviceId = (back || cams[0]).id;
 
       await scanner.start(
-        {
-          deviceId: { exact: deviceId },
-          // Más resolución = más píxeles por módulo del QR denso = mejor tasa de decodificación.
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
+        { deviceId: { exact: deviceId } },
         {
           fps: 10,
           qrbox: (vw, vh) => {

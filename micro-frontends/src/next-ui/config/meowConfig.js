@@ -34,9 +34,12 @@ export function extractBundleId(bundleUrl) {
 }
 
 // Extrae el payload MeOw (claim -7) del objeto "decoded" que devuelve /meow/_decode.
-// Estructura esperada: { "1": iss, "4": exp, "6": iat, "-260": { "-7": { n, dob, s, id, dt, m: [...] } } }
+// Estructura real observada: { cose: {...}, diagnostics: {...}, hcert: null,
+//   payload: { "1": iss, "4": exp, "6": iat, "-260": { "-7": { n, dob, s, id, dt, m: [...] } } } }
+// Se soporta también decoded["-260"] directo por si el mediador cambia el nivel de anidamiento.
 export function extractMeowPayload(decoded) {
-  const hcert = decoded && decoded['-260'];
+  const claims = (decoded && decoded.payload) || decoded;
+  const hcert = claims && claims['-260'];
   if (!hcert || typeof hcert !== 'object') return null;
   if (hcert['-7'] && typeof hcert['-7'] === 'object') return hcert['-7'];
   const first = Object.values(hcert).find((v) => v && typeof v === 'object');
