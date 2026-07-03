@@ -430,7 +430,10 @@ function MedicationStatementDisplayControlInner(props) {
                 id="ms-reader-hc1"
                 rows={3}
                 value={reader.text}
-                onChange={(e) => setReader((r) => ({ ...r, text: e.target.value, imageBase64: null, imageName: "" }))}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setReader((r) => ({ ...r, text: value, imageBase64: null, imageName: "" }));
+                }}
                 onPaste={(e) => {
                   e.stopPropagation();
                   // eslint-disable-next-line no-console
