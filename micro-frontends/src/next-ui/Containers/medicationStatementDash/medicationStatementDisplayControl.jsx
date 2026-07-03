@@ -370,7 +370,13 @@ export function MedicationStatementDisplayControl(props) {
 
   const readerModalEl = reader.open && (
     <div className="ms-qr-modal__overlay" onClick={closeReader}>
-      <div className="ms-qr-modal ms-qr-modal--wide" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="ms-qr-modal ms-qr-modal--wide"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        onKeyUp={(e) => e.stopPropagation()}
+        onPaste={(e) => e.stopPropagation()}
+      >
         <div className="ms-qr-modal__header">
           <span className="ms-qr-modal__title">Leer QR MeOw</span>
           <button type="button" className="ms-qr-modal__close" onClick={closeReader} aria-label="Cerrar">×</button>
@@ -393,6 +399,14 @@ export function MedicationStatementDisplayControl(props) {
                 rows={3}
                 value={reader.text}
                 onChange={(e) => setReader((r) => ({ ...r, text: e.target.value, imageBase64: null, imageName: "" }))}
+                onPaste={(e) => {
+                  e.stopPropagation();
+                  // eslint-disable-next-line no-console
+                  console.log("[MeOw] onPaste en textarea HC1", {
+                    length: e.clipboardData && e.clipboardData.getData("text").length,
+                  });
+                }}
+                onKeyDown={(e) => e.stopPropagation()}
                 placeholder="HC1:..."
               />
             </div>
