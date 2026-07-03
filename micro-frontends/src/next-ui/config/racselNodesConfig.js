@@ -26,7 +26,16 @@ export const NODES_CONFIG = {
     (globalCfg.RACSEL_RESOURCE_FHIR_BASE || env.RACSEL_RESOURCE_FHIR_BASE || DEFAULT_RESOURCE_FHIR_BASE).replace(/\/$/, ''),
   BASIC_USER: globalCfg.RACSEL_BASIC_USER || env.RACSEL_BASIC_USER || '',
   BASIC_PASS: globalCfg.RACSEL_BASIC_PASS || env.RACSEL_BASIC_PASS || '',
-  // Rutas a NN de otros países (placeholder multi-nodo). Clave = código país (ISO alpha-2).
+  // País propio (ISO alpha-2) del nodo nacional local.
+  OWN_COUNTRY: globalCfg.RACSEL_OWN_COUNTRY || env.RACSEL_OWN_COUNTRY || 'CL',
+  // Endpoint del mediador de contrarreferencia (arma el MHD). El dashboard le manda {narrativa, srRef, paciente}.
+  // Ajustar a la URL pública real del OpenHIM que rutea al mediador 8020.
+  CONTRARREF_ENDPOINT:
+    (globalCfg.RACSEL_CONTRARREF_ENDPOINT || env.RACSEL_CONTRARREF_ENDPOINT ||
+     'https://apiopenhim.nodonacionalph4h-dev.minsal.cl/forwardercontrarreferencia/_answer').replace(/\/$/, ''),
+  // Rutas a NN de otros países. Clave = código país (ISO alpha-2), valor = base FHIR (…/fhir).
+  // Ej: { "PA": "https://hapinacional-panama/fhir", "UY": "https://nn-uy/fhir" }.
+  // Se agrega un país nuevo simplemente añadiendo su URL aquí (o vía RACSEL_COUNTRY_ROUTES en runtime).
   COUNTRY_ROUTES: globalCfg.RACSEL_COUNTRY_ROUTES || env.RACSEL_COUNTRY_ROUTES || {},
 };
 
@@ -35,6 +44,17 @@ export function fhirBaseForCountry(countryCode) {
   const routes = NODES_CONFIG.COUNTRY_ROUTES || {};
   if (countryCode && routes[countryCode]) return String(routes[countryCode]).replace(/\/$/, '');
   return NODES_CONFIG.NATIONAL_FHIR_BASE;
+}
+
+// Lista de nodos nacionales a consultar (multi-nodo): el propio + los de COUNTRY_ROUTES.
+// Cada entrada: { country, base }. Dedup por base. El nodo propio siempre está presente.
+export function listNodes() {
+  const routes = NODES_CONFIG.COUNTRY_ROUTES || {};
+  const own = { country: NODES_CONFIG.OWN_COUNTRY, base: NODES_CONFIG.NATIONAL_FHIR_BASE };
+  const others = Object.keys(routes).map((c) => ({ country: c, base: String(routes[c]).replace(/\/$/, '') }));
+  const all = [own, ...others];
+  const seen = new Set();
+  return all.filter((n) => n.base && !seen.has(n.base) && seen.add(n.base));
 }
 
 export function buildAuthHeaders(accept = 'application/fhir+json') {
@@ -66,12 +86,124 @@ export async function fetchServiceRequestsByPatient(axiosInst, identifier) {
   if (!id) return [];
   const url =
     `${base}/ServiceRequest?patient.identifier=${encodeURIComponent(id)}` +
-    `&_sort=-authoredOn&_count=50`;
+    `&_sort=-authored&_count=50`;
   const res = await axiosInst.get(url, { headers: buildAuthHeaders() });
   return (res.data && res.data.entry ? res.data.entry : [])
     .map((e) => e.resource)
     .filter((r) => r && r.resourceType === 'ServiceRequest')
     .map((r) => ({ resource: r }));
+}
+
+// Contrarreferencias (respuesta a la interconsulta): documentos MHD tipo 11488-4 (LACCompositionIT).
+// Devuelve, por cada DocumentReference, su bundleUrl (para leer la narrativa) y las referencias de
+// context.related (para correlacionar con el ServiceRequest exacto que responde). Una sola query.
+export async function fetchResponseDocsByPatient(axiosInst, identifier, typeCode = DOC_TYPE.INTERCONSULTA) {
+  const base = NODES_CONFIG.NATIONAL_FHIR_BASE;
+  const id = cleanIdentifier(identifier);
+  if (!id) return [];
+  const url =
+    `${base}/DocumentReference?patient.identifier=${encodeURIComponent(id)}` +
+    `&type=${encodeURIComponent(typeCode)}&_sort=-_lastUpdated&_count=50`;
+  const res = await axiosInst.get(url, { headers: buildAuthHeaders() });
+  const docRefs = (res.data && res.data.entry ? res.data.entry : [])
+    .map((e) => e.resource)
+    .filter((r) => r && r.resourceType === 'DocumentReference');
+  return docRefs.map((dr) => {
+    let bundleUrl = (dr.content || []).map((c) => c && c.attachment && c.attachment.url).find(Boolean);
+    if (bundleUrl && !/^https?:\/\//i.test(bundleUrl)) bundleUrl = `${base}/${String(bundleUrl).replace(/^\//, '')}`;
+    const relatedRefs = ((dr.context && dr.context.related) || [])
+      .map((r) => r && r.reference).filter(Boolean);
+    return { docRef: dr, bundleUrl, relatedRefs, date: dr.date || (dr.meta && dr.meta.lastUpdated) };
+  });
+}
+
+// Lee la narrativa (Composition.section[].text) de un Bundle documento MHD, como texto plano.
+export async function fetchNarrativeFromBundle(axiosInst, bundleUrl) {
+  if (!bundleUrl) return '';
+  const bRes = await axiosInst.get(bundleUrl, { headers: buildAuthHeaders() });
+  const entries = (bRes.data && bRes.data.entry) ? bRes.data.entry : [];
+  const comp = entries.map((e) => e.resource).find((r) => r && r.resourceType === 'Composition');
+  const sections = (comp && comp.section) || [];
+  const html = sections.map((s) => s && s.text && s.text.div).filter(Boolean).join(' ');
+  // El div es contenido propio (texto del especialista): lo pasamos a texto plano para no inyectar HTML.
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// MULTI-NODO: consulta los ServiceRequest del paciente en CADA nodo nacional configurado
+// (el propio + COUNTRY_ROUTES). Cada resultado queda etiquetado con su nodo de origen, para poder
+// (a) filtrar por país y (b) hacer el PUT de "completar" en el nodo donde vive ese SR.
+// Devuelve [{ resource, node: { country, base } }].
+export async function fetchServiceRequestsAllNodes(axiosInst, identifier) {
+  const id = cleanIdentifier(identifier);
+  if (!id) return [];
+  const nodes = listNodes();
+  const perNode = await Promise.all(nodes.map(async (node) => {
+    const url = `${node.base}/ServiceRequest?patient.identifier=${encodeURIComponent(id)}&_sort=-authored&_count=50`;
+    try {
+      const res = await axiosInst.get(url, { headers: buildAuthHeaders() });
+      return (res.data && res.data.entry ? res.data.entry : [])
+        .map((e) => e.resource)
+        .filter((r) => r && r.resourceType === 'ServiceRequest')
+        .map((r) => ({ resource: r, node }));
+    } catch (e) { return []; } // nodo inaccesible: se omite, no rompe el resto
+  }));
+  return perNode.flat();
+}
+
+// MULTI-NODO: consulta las contrarreferencias (DocumentReference type 11488-4) en CADA nodo.
+// Así vemos tanto nuestras respuestas como las que otros países dieron a nuestras interconsultas.
+// Devuelve [{ docRef, bundleUrl, relatedRefs, date, node }].
+export async function fetchResponseDocsAllNodes(axiosInst, identifier, typeCode = DOC_TYPE.INTERCONSULTA) {
+  const id = cleanIdentifier(identifier);
+  if (!id) return [];
+  const nodes = listNodes();
+  const perNode = await Promise.all(nodes.map(async (node) => {
+    const url = `${node.base}/DocumentReference?patient.identifier=${encodeURIComponent(id)}` +
+      `&type=${encodeURIComponent(typeCode)}&_sort=-_lastUpdated&_count=50`;
+    try {
+      const res = await axiosInst.get(url, { headers: buildAuthHeaders() });
+      const docRefs = (res.data && res.data.entry ? res.data.entry : [])
+        .map((e) => e.resource)
+        .filter((r) => r && r.resourceType === 'DocumentReference');
+      return docRefs.map((dr) => {
+        let bundleUrl = (dr.content || []).map((c) => c && c.attachment && c.attachment.url).find(Boolean);
+        if (bundleUrl && !/^https?:\/\//i.test(bundleUrl)) bundleUrl = `${node.base}/${String(bundleUrl).replace(/^\//, '')}`;
+        const relatedRefs = ((dr.context && dr.context.related) || []).map((r) => r && r.reference).filter(Boolean);
+        return { docRef: dr, bundleUrl, relatedRefs, date: dr.date || (dr.meta && dr.meta.lastUpdated), node };
+      });
+    } catch (e) { return []; }
+  }));
+  return perNode.flat();
+}
+
+// Marca un ServiceRequest como completed en el NODO DE ORIGEN (donde vive ese SR).
+export async function completeServiceRequestOnNode(axiosInst, sr, base) {
+  const { meta, ...rest } = sr;
+  const cleanMeta = meta && meta.profile ? { profile: meta.profile } : undefined;
+  const updated = { ...rest, ...(cleanMeta ? { meta: cleanMeta } : {}), status: 'completed' };
+  if (Array.isArray(updated.supportingInfo)) {
+    updated.supportingInfo = updated.supportingInfo.map((si) =>
+      (si && si.reference && !/^https?:\/\//i.test(si.reference))
+        ? { ...si, reference: `${base}/${String(si.reference).replace(/^\//, '')}` } : si);
+  }
+  const url = `${base}/ServiceRequest/${sr.id}`;
+  await axiosInst.put(url, updated, {
+    headers: { ...buildAuthHeaders(), 'Content-Type': 'application/fhir+json' },
+  });
+}
+
+// ============================================================================
+// CONTRARREFERENCIA (respuesta) — se DELEGA al mediador 8020 por la complejidad del MHD.
+// El dashboard NO arma el documento: manda { narrativa, srRef, paciente } al endpoint del mediador,
+// y el mediador construye y POSTea el LACBundleTransactionMHDIT (ITI-65) al nodo nacional.
+// ============================================================================
+export async function submitContrarreferencia(axiosInst, { identifier, patientUuid, narrative, srRef }) {
+  const endpoint = NODES_CONFIG.CONTRARREF_ENDPOINT;
+  if (!endpoint) throw new Error('Endpoint de contrarreferencia no configurado (RACSEL_CONTRARREF_ENDPOINT)');
+  const body = { patientUuid, identifier: cleanIdentifier(identifier), narrative, srRef };
+  await axiosInst.post(endpoint, body, {
+    headers: { ...buildAuthHeaders('application/json'), 'Content-Type': 'application/json' },
+  });
 }
 
 // Flujo document-based (igual que el dashboard IPS): consulta DocumentReference por
