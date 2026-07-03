@@ -48,6 +48,17 @@ const normalizeHc1Input = (rawInput) => {
   return withoutLineBreaks;
 };
 
+// "Network Error" de axios no trae response (CORS bloqueado, mediador caído/no registrado en
+// OpenHIM, DNS, o mixed-content). Se agrega una pista para no confundirlo con un error de negocio.
+const humanizeHttpError = (e, fallbackLabel = "Error") => {
+  if (e && e.response) return `${e.response.status} ${e.response.statusText}`;
+  const raw = (e && e.message) || String(e || fallbackLabel);
+  if (/Network Error/i.test(raw) || /Failed to fetch/i.test(raw)) {
+    return `${raw} (posible CORS, mediador MeOw no disponible/registrado en OpenHIM, o certificado TLS no confiable)`;
+  }
+  return raw;
+};
+
 const nextFrame = () =>
   new Promise((resolve) => {
     if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
@@ -126,10 +137,7 @@ export function MedicationStatementDisplayControl(props) {
 
       setQrModal((q) => ({ ...q, loading: false, qrCodeDataUrl: qrCode.qrCodeDataUrl }));
     } catch (e) {
-      const msg = e && e.response
-        ? `${e.response.status} ${e.response.statusText}`
-        : (e && e.message) || "Error generando el QR";
-      setQrModal((q) => ({ ...q, loading: false, error: msg }));
+      setQrModal((q) => ({ ...q, loading: false, error: humanizeHttpError(e, "Error generando el QR") }));
     }
   };
 
@@ -233,10 +241,7 @@ export function MedicationStatementDisplayControl(props) {
 
       setReader((r) => ({ ...r, loading: false, decoded, payload }));
     } catch (e) {
-      const msg = e && e.response
-        ? `${e.response.status} ${e.response.statusText}`
-        : (e && e.message) || "Error decodificando el QR";
-      setReader((r) => ({ ...r, loading: false, error: msg }));
+      setReader((r) => ({ ...r, loading: false, error: humanizeHttpError(e, "Error decodificando el QR") }));
     }
   };
 
