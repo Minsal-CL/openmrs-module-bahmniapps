@@ -103,7 +103,39 @@ const waitRegionReady = async (id, timeoutMs = 10000) => {
   }
 };
 
-export function MedicationStatementDisplayControl(props) {
+// React desmonta todo el árbol si un error de render no es capturado por un Error Boundary
+// (solo funciona en class components). Se agrega para que un error al pegar el HC1 no
+// haga "desaparecer" el pop-up entero sin dejar rastro: en vez de eso, muestra el error.
+class MeowErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  componentDidCatch(error, info) {
+    // eslint-disable-next-line no-console
+    console.error("[MeOw] Error de render capturado:", error, info && info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="ms-dash">
+          <div className="ms-dash__error">
+            ⚠️ Ocurrió un error inesperado en el dashboard de medicamentos: {this.state.error.message || String(this.state.error)}
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function MedicationStatementDisplayControlInner(props) {
   const { hostData } = props;
   const { identifier } = hostData || {};
   const [items, setItems] = useState([]); // [{resource, docRef, bundleUrl}]
@@ -472,6 +504,14 @@ export function MedicationStatementDisplayControl(props) {
       {readerModalEl}
       {body}
     </div>
+  );
+}
+
+export function MedicationStatementDisplayControl(props) {
+  return (
+    <MeowErrorBoundary>
+      <MedicationStatementDisplayControlInner {...props} />
+    </MeowErrorBoundary>
   );
 }
 
