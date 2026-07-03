@@ -7,9 +7,6 @@
 const globalCfg = (typeof window !== 'undefined' && window.__MFE_CONFIG__) || {};
 const env = (typeof process !== 'undefined' && process.env) || {};
 
-const MEOW_BASIC_USER = 'mediator-proxy@openhim.org';
-const MEOW_BASIC_USER = 'Lopior.123';
-
 export const MEOW_CONFIG = {
   GENERATE_URL:
     globalCfg.MEOW_GENERATE_URL || env.MEOW_GENERATE_URL ||
