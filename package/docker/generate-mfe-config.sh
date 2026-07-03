@@ -30,6 +30,10 @@ write_config() {
   write_config ICVP_VHL_RESOLVE_URL "$(escape_js "${ICVP_VHL_RESOLVE_URL:-}")"
   write_config ICVP_FROM_BUNDLE_URL "$(escape_js "${ICVP_FROM_BUNDLE_URL:-}")"
   write_config ICVP_BASE "$(escape_js "${ICVP_BASE:-}")"
+  write_config MEOW_GENERATE_URL "$(escape_js "${MEOW_GENERATE_URL:-}")"
+  write_config MEOW_DECODE_URL "$(escape_js "${MEOW_DECODE_URL:-}")"
+  write_config MEOW_BASIC_USER "$(escape_js "${MEOW_BASIC_USER:-}")"
+  write_config MEOW_BASIC_PASS "$(escape_js "${MEOW_BASIC_PASS:-}")"
 } > "$TARGET_DIR/mfe-runtime-config.js"
 
 exec "$@"

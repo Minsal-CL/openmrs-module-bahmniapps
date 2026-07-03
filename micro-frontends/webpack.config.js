@@ -27,6 +27,10 @@ const defineEnv = {
   "process.env.IPS_BASIC_PASS": JSON.stringify(envValues.IPS_BASIC_PASS || ""),
   "process.env.IPS_VHL_ISSUANCE_URL": JSON.stringify(envValues.IPS_VHL_ISSUANCE_URL || ""),
   "process.env.IPS_VHL_RESOLVE_URL": JSON.stringify(envValues.IPS_VHL_RESOLVE_URL || ""),
+  "process.env.MEOW_GENERATE_URL": JSON.stringify(envValues.MEOW_GENERATE_URL || ""),
+  "process.env.MEOW_DECODE_URL": JSON.stringify(envValues.MEOW_DECODE_URL || ""),
+  "process.env.MEOW_BASIC_USER": JSON.stringify(envValues.MEOW_BASIC_USER || ""),
+  "process.env.MEOW_BASIC_PASS": JSON.stringify(envValues.MEOW_BASIC_PASS || ""),
   "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
 };
 
