@@ -59,6 +59,26 @@ const humanizeHttpError = (e, fallbackLabel = "Error") => {
   return raw;
 };
 
+// Log detallado en consola para poder distinguir CORS / mediador caído / error de negocio
+// sin depender del mensaje genérico "Network Error" que muestra axios en la UI.
+const logMeowError = (context, e, extra) => {
+  // eslint-disable-next-line no-console
+  console.error(`[MeOw] ${context} falló:`, {
+    message: e && e.message,
+    code: e && e.code,
+    url: e && e.config && e.config.url,
+    method: e && e.config && e.config.method,
+    requestData: e && e.config && e.config.data,
+    hasResponse: !!(e && e.response),
+    responseStatus: e && e.response && e.response.status,
+    responseData: e && e.response && e.response.data,
+    hasRequest: !!(e && e.request),
+    ...extra,
+  });
+  // eslint-disable-next-line no-console
+  console.error(e);
+};
+
 const nextFrame = () =>
   new Promise((resolve) => {
     if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
@@ -124,9 +144,13 @@ export function MedicationStatementDisplayControl(props) {
         id: bundleId,
         entry: [{ resource: { resourceType: "MedicationStatement", id: ms.id } }],
       };
+      // eslint-disable-next-line no-console
+      console.log("[MeOw] POST _generate", MEOW_CONFIG.GENERATE_URL, payload);
       const res = await axiosMS.post(MEOW_CONFIG.GENERATE_URL, payload, {
         headers: { ...buildMeowAuthHeaders(), "Content-Type": "application/json" },
       });
+      // eslint-disable-next-line no-console
+      console.log("[MeOw] _generate response", res.status, res.data);
 
       const results = (res.data && res.data.results) || [];
       const result = results.find((r) => r.medicationStatementId === ms.id) || results[0];
@@ -137,6 +161,7 @@ export function MedicationStatementDisplayControl(props) {
 
       setQrModal((q) => ({ ...q, loading: false, qrCodeDataUrl: qrCode.qrCodeDataUrl }));
     } catch (e) {
+      logMeowError("_generate", e, { medicationStatementId: ms.id, bundleUrl });
       setQrModal((q) => ({ ...q, loading: false, error: humanizeHttpError(e, "Error generando el QR") }));
     }
   };
@@ -230,9 +255,13 @@ export function MedicationStatementDisplayControl(props) {
         body = { hc1 };
       }
 
+      // eslint-disable-next-line no-console
+      console.log("[MeOw] POST _decode", MEOW_CONFIG.DECODE_URL, reader.imageBase64 ? { qrImage: "<base64 omitido>" } : body);
       const res = await axiosMS.post(MEOW_CONFIG.DECODE_URL, body, {
         headers: { ...buildMeowAuthHeaders(), "Content-Type": "application/json" },
       });
+      // eslint-disable-next-line no-console
+      console.log("[MeOw] _decode response", res.status, res.data);
 
       const decoded = res.data && res.data.decoded;
       if (!decoded) throw new Error("El servicio de decodificación no devolvió un resultado.");
@@ -241,6 +270,7 @@ export function MedicationStatementDisplayControl(props) {
 
       setReader((r) => ({ ...r, loading: false, decoded, payload }));
     } catch (e) {
+      logMeowError("_decode", e, { usingImage: !!reader.imageBase64 });
       setReader((r) => ({ ...r, loading: false, error: humanizeHttpError(e, "Error decodificando el QR") }));
     }
   };
