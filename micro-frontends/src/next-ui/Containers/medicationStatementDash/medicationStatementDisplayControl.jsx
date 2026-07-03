@@ -195,6 +195,11 @@ export function MedicationStatementDisplayControl(props) {
 
       const scanner = new Html5Qrcode(READER_REGION_ID, {
         formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        // El QR de MeOw (HC1) es muy denso (payload CBOR/Base45 largo): el decoder JS puro
+        // falla seguido con cámaras web a baja resolución. El BarcodeDetector nativo del
+        // navegador (Chrome/Edge) es mucho más robusto para códigos densos; si el browser
+        // no lo soporta, html5-qrcode cae automáticamente al decoder JS de siempre.
+        experimentalFeatures: { useBarCodeDetectorIfSupported: true },
         verbose: false,
       });
       scannerRef.current = scanner;
@@ -205,21 +210,48 @@ export function MedicationStatementDisplayControl(props) {
       const deviceId = (back || cams[0]).id;
 
       await scanner.start(
-        { deviceId: { exact: deviceId } },
         {
-          fps: 12,
+          deviceId: { exact: deviceId },
+          // Más resolución = más píxeles por módulo del QR denso = mejor tasa de decodificación.
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+        },
+        {
+          fps: 10,
           qrbox: (vw, vh) => {
             const min = Math.min(vw, vh);
-            const size = Math.floor(Math.min(280, min * 0.8));
+            // Caja de escaneo grande: un QR denso necesita ocupar el mayor área posible
+            // del cuadro para que cada módulo tenga suficientes píxeles.
+            const size = Math.floor(Math.min(420, min * 0.9));
             return { width: size, height: size };
           },
           aspectRatio: 1.0,
+          disableFlip: true,
         },
         async (decodedText) => {
           setReader((r) => ({ ...r, text: decodedText || "", imageBase64: null, imageName: "", scanStatus: "QR detectado." }));
           await stopScan();
         },
-        () => { /* frames sin QR detectado: se ignora */ }
+        (() => {
+          const startedAt = Date.now();
+          let lastNoticeAt = 0;
+          return (errMsg) => {
+            const now = Date.now();
+            if (now - startedAt <= 4000) {
+              if (now - lastNoticeAt > 2000) {
+                lastNoticeAt = now;
+                setReader((r) => (r.scanActive ? { ...r, scanStatus: "Cámara activa. Apunta al QR dentro del recuadro." } : r));
+              }
+              return;
+            }
+            if (now - lastNoticeAt > 2500) {
+              lastNoticeAt = now;
+              setReader((r) => (r.scanActive
+                ? { ...r, scanStatus: "No se detecta el QR aún. Acércalo/aléjalo, evita reflejos y espera 2–3s." }
+                : r));
+            }
+          };
+        })()
       );
     } catch (e) {
       setReader((r) => ({
