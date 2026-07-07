@@ -130,7 +130,7 @@ export async function fetchNarrativeFromBundle(axiosInst, bundleUrl) {
 }
 
 // MULTI-NODO: consulta los ServiceRequest del paciente en CADA nodo nacional configurado
-// (el propio + COUNTRY_ROUTES). Cada resultado queda etiquetado con su nodo de origen, para poder
+// (). Cada resultado queda etiquetado con su nodo de origen, para poder
 // (a) filtrar por país y (b) hacer el PUT de "completar" en el nodo donde vive ese SR.
 // Devuelve [{ resource, node: { country, base } }].
 export async function fetchServiceRequestsAllNodes(axiosInst, identifier) {

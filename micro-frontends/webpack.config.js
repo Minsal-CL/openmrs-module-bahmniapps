@@ -32,6 +32,7 @@ const defineEnv = {
   "process.env.MEOW_BASIC_USER": JSON.stringify(envValues.MEOW_BASIC_USER || ""),
   "process.env.MEOW_BASIC_PASS": JSON.stringify(envValues.MEOW_BASIC_PASS || ""),
   "process.env.NODE_ENV": JSON.stringify(process.env.NODE_ENV || "production"),
+  "process.env.RACSEL_COUNTRY_ROUTES": JSON.stringify(envValues.RACSEL_COUNTRY_ROUTES || ""),
 };
 
 module.exports = {
