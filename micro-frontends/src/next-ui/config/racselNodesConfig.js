@@ -17,6 +17,16 @@ const env = (typeof process !== 'undefined' && process.env) || {};
 const DEFAULT_NATIONAL_FHIR_BASE = 'https://hapinacional.nodonacionalph4h-dev.minsal.cl/fhir';
 const DEFAULT_RESOURCE_FHIR_BASE = 'https://hapilocal.nodonacionalph4h-dev.minsal.cl/fhir';
 
+// RACSEL_COUNTRY_ROUTES llega como string JSON desde .env/webpack (window.__MFE_CONFIG__ puede traerlo ya como objeto).
+function parseCountryRoutes(value) {
+  if (value && typeof value === 'object') return value;
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const parsed = JSON.parse(value);
+    return (parsed && typeof parsed === 'object') ? parsed : null;
+  } catch (e) { return null; }
+}
+
 export const NODES_CONFIG = {
   // Nodo Nacional propio (lectura de documentos MHD: DocumentReference + Bundle)
   NATIONAL_FHIR_BASE:
@@ -35,8 +45,8 @@ export const NODES_CONFIG = {
      'https://apiopenhim.nodonacionalph4h-dev.minsal.cl/forwardercontrarreferencia/_answer').replace(/\/$/, ''),
   // Rutas a NN de otros países. Clave = código país (ISO alpha-2), valor = base FHIR (…/fhir).
   // Ej: { "PA": "https://hapinacional-panama/fhir", "UY": "https://nn-uy/fhir" }.
-  // Se agrega un país nuevo simplemente añadiendo su URL aquí (o vía RACSEL_COUNTRY_ROUTES en runtime).
-  COUNTRY_ROUTES: globalCfg.RACSEL_COUNTRY_ROUTES || env.RACSEL_COUNTRY_ROUTES || {},
+  // Se agrega un país nuevo vía RACSEL_COUNTRY_ROUTES (.env, JSON) o window.__MFE_CONFIG__ en runtime.
+  COUNTRY_ROUTES: parseCountryRoutes(globalCfg.RACSEL_COUNTRY_ROUTES) || parseCountryRoutes(env.RACSEL_COUNTRY_ROUTES) || {},
 };
 
 // Base FHIR para un país dado (ISO alpha-2). Hoy: nacional propio si no hay ruta específica.
