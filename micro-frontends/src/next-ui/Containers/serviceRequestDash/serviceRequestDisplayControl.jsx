@@ -132,12 +132,14 @@ export function ServiceRequestDisplayControl(props) {
   // nuestro nodo con su DocumentReference; el país de origen lo consulta y hace el PUT completed.
   const submitAnswer = async () => {
     if (!answering || !answerText.trim()) return;
-    const { sr } = answering;
+    const { sr, node } = answering;
     setSubmitting(true); setError(null);
     try {
+      // srRef ABSOLUTO al nodo de origen del SR (otro país). Así el context.related del MHD es una
+      // referencia externa que hapinacional NO intenta resolver localmente (evita HAPI-1094).
       await submitContrarreferencia(axiosSR, {
         identifier, patientUuid, narrative: answerText.trim(),
-        srRef: `ServiceRequest/${sr.id}`, base: NODES_CONFIG.NATIONAL_FHIR_BASE,
+        srRef: `${node.base}/ServiceRequest/${sr.id}`, base: NODES_CONFIG.NATIONAL_FHIR_BASE,
       });
       setAnswering(null); setAnswerText("");
       await load();
@@ -149,10 +151,11 @@ export function ServiceRequestDisplayControl(props) {
     } finally { setSubmitting(false); }
   };
 
-  // Completar (SR PROPIO con respuesta): PUT status:completed en NUESTRO nodo. Sin diálogo.
-  const completeOnly = async (sr, node) => {
+  // Completar (SR PROPIO con respuesta): PUT status:completed SIEMPRE en NUESTRO nodo. Sin diálogo.
+  // Se usa NATIONAL_FHIR_BASE explícito (no node.base) para garantizar que NUNCA escribimos en otro país.
+  const completeOnly = async (sr) => {
     setBusyId(sr.id); setError(null);
-    try { await completeServiceRequestOnNode(axiosSR, sr, node.base); await load(); }
+    try { await completeServiceRequestOnNode(axiosSR, sr, NODES_CONFIG.NATIONAL_FHIR_BASE); await load(); }
     catch (e) {
       const oo = e && e.response && e.response.data;
       const issue = oo && oo.issue && oo.issue[0];
@@ -216,7 +219,7 @@ export function ServiceRequestDisplayControl(props) {
                   <td className="sr-actions">
                     {/* Completar: SOLO nuestros SRs (CL) con respuesta → cerramos lo propio */}
                     {isOwn && active && resp ? (
-                      <button className="sr-btn-complete" disabled={busyId === sr.id} onClick={() => completeOnly(sr, node)}>
+                      <button className="sr-btn-complete" disabled={busyId === sr.id} onClick={() => completeOnly(sr)}>
                         {busyId === sr.id ? "…" : "Completar"}
                       </button>
                     ) : null}
