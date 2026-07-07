@@ -147,15 +147,26 @@ export async function fetchServiceRequestsAllNodes(axiosInst, identifier) {
   const id = cleanIdentifier(identifier);
   if (!id) return [];
   const nodes = listNodes();
+  // eslint-disable-next-line no-console
+  console.log(`[RACSEL][ServiceRequest] Buscando identifier="${id}" en ${nodes.length} nodo(s):`,
+    nodes.map((n) => `${n.country} -> ${n.base}`));
   const perNode = await Promise.all(nodes.map(async (node) => {
     const url = `${node.base}/ServiceRequest?patient.identifier=${encodeURIComponent(id)}&_sort=-authored&_count=50`;
+    // eslint-disable-next-line no-console
+    console.log(`[RACSEL][ServiceRequest] GET (${node.country}):`, url);
     try {
       const res = await axiosInst.get(url, { headers: buildAuthHeaders() });
-      return (res.data && res.data.entry ? res.data.entry : [])
+      const found = (res.data && res.data.entry ? res.data.entry : [])
         .map((e) => e.resource)
-        .filter((r) => r && r.resourceType === 'ServiceRequest')
-        .map((r) => ({ resource: r, node }));
-    } catch (e) { return []; } // nodo inaccesible: se omite, no rompe el resto
+        .filter((r) => r && r.resourceType === 'ServiceRequest');
+      // eslint-disable-next-line no-console
+      console.log(`[RACSEL][ServiceRequest] (${node.country}) ${found.length} resultado(s) en ${node.base}`);
+      return found.map((r) => ({ resource: r, node }));
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(`[RACSEL][ServiceRequest] (${node.country}) error consultando ${node.base}:`, (e && e.message) || e);
+      return []; // nodo inaccesible: se omite, no rompe el resto
+    }
   }));
   return perNode.flat();
 }
