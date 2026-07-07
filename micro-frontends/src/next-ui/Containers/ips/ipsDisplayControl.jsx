@@ -203,7 +203,7 @@ const parseDocRefsFromBundle = (bundle) => {
             if (resource?.resourceType !== "DocumentReference") return null;
             const fullUrl = entry?.fullUrl || "";
             const base = getFhirBaseFromDocFullUrl(fullUrl) || REGIONAL_BASE;
-            console.log("[parseDocRefsFromBundle] DocumentReference id:", resource?.id, "fullUrl:", fullUrl, "base detectada:", base);
+            //console.log("[parseDocRefsFromBundle] DocumentReference id:", resource?.id, "fullUrl:", fullUrl, "base detectada:", base);
             return {...resource, __docRefBase: base, __fullUrl: fullUrl};
         })
         .filter(Boolean);
