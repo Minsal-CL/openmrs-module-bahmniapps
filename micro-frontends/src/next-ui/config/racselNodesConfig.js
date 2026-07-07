@@ -17,6 +17,12 @@ const env = (typeof process !== 'undefined' && process.env) || {};
 const DEFAULT_NATIONAL_FHIR_BASE = 'https://hapinacional.nodonacionalph4h-dev.minsal.cl/fhir';
 const DEFAULT_RESOURCE_FHIR_BASE = 'https://hapilocal.nodonacionalph4h-dev.minsal.cl/fhir';
 
+// Rutas a NN de otros países, hardcodeadas porque RACSEL_COUNTRY_ROUTES vía .env no se pudo levantar
+// en el ambiente actual. Agregar un país nuevo = agregar su entrada aquí.
+const DEFAULT_COUNTRY_ROUTES = {
+  UY: 'https://lacpass-test.agesic.gub.uy/fhir',
+};
+
 // RACSEL_COUNTRY_ROUTES llega como string JSON desde .env/webpack (window.__MFE_CONFIG__ puede traerlo ya como objeto).
 function parseCountryRoutes(value) {
   if (value && typeof value === 'object') return value;
@@ -45,8 +51,10 @@ export const NODES_CONFIG = {
      'https://apiopenhim.nodonacionalph4h-dev.minsal.cl/forwardercontrarreferencia/_answer').replace(/\/$/, ''),
   // Rutas a NN de otros países. Clave = código país (ISO alpha-2), valor = base FHIR (…/fhir).
   // Ej: { "PA": "https://hapinacional-panama/fhir", "UY": "https://nn-uy/fhir" }.
-  // Se agrega un país nuevo vía RACSEL_COUNTRY_ROUTES (.env, JSON) o window.__MFE_CONFIG__ en runtime.
-  COUNTRY_ROUTES: parseCountryRoutes(globalCfg.RACSEL_COUNTRY_ROUTES) || parseCountryRoutes(env.RACSEL_COUNTRY_ROUTES) || {},
+  // Se puede sobreescribir vía RACSEL_COUNTRY_ROUTES (.env, JSON) o window.__MFE_CONFIG__ en runtime;
+  // si no llega ninguno, se usa el default hardcodeado (DEFAULT_COUNTRY_ROUTES).
+  COUNTRY_ROUTES: parseCountryRoutes(globalCfg.RACSEL_COUNTRY_ROUTES)
+    || parseCountryRoutes(env.RACSEL_COUNTRY_ROUTES) || DEFAULT_COUNTRY_ROUTES,
 };
 
 // Base FHIR para un país dado (ISO alpha-2). Hoy: nacional propio si no hay ruta específica.
