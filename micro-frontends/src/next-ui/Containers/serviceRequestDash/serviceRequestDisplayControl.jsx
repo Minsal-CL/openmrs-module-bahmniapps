@@ -127,16 +127,18 @@ export function ServiceRequestDisplayControl(props) {
 
   const openAnswer = (sr, node) => { setAnswering({ sr, node }); setAnswerText(""); setError(null); };
 
+  // Contestar (SR de OTRO país): solo crea la contrarreferencia (MHD en NUESTRO nodo).
+  // NO completa el SR — el país de origen es quien lo cierra (Track 1.2). El documento queda en
+  // nuestro nodo con su DocumentReference; el país de origen lo consulta y hace el PUT completed.
   const submitAnswer = async () => {
     if (!answering || !answerText.trim()) return;
-    const { sr, node } = answering;
+    const { sr } = answering;
     setSubmitting(true); setError(null);
     try {
       await submitContrarreferencia(axiosSR, {
         identifier, patientUuid, narrative: answerText.trim(),
         srRef: `ServiceRequest/${sr.id}`, base: NODES_CONFIG.NATIONAL_FHIR_BASE,
       });
-      await completeServiceRequestOnNode(axiosSR, sr, node.base);
       setAnswering(null); setAnswerText("");
       await load();
     } catch (e) {
@@ -147,7 +149,7 @@ export function ServiceRequestDisplayControl(props) {
     } finally { setSubmitting(false); }
   };
 
-  // Completar cuando YA hay respuesta: solo cierra el SR (sin re-preguntar ni duplicar).
+  // Completar (SR PROPIO con respuesta): PUT status:completed en NUESTRO nodo. Sin diálogo.
   const completeOnly = async (sr, node) => {
     setBusyId(sr.id); setError(null);
     try { await completeServiceRequestOnNode(axiosSR, sr, node.base); await load(); }
@@ -194,6 +196,10 @@ export function ServiceRequestDisplayControl(props) {
           <tbody>
             {visible.map(({ resource: sr, node }) => {
               const resp = responseForSr(responses, sr);
+              // Propio = SR emitido por NUESTRO nodo (CL). Solo lo propio se completa; lo ajeno se contesta.
+              const isOwn = (node.country || "") === NODES_CONFIG.OWN_COUNTRY
+                || node.base === NODES_CONFIG.NATIONAL_FHIR_BASE;
+              const active = sr.status === "active";
               return (
                 <tr key={`${node.base}|${sr.id}`}>
                   <td>{node.country || "—"}</td>
@@ -208,12 +214,14 @@ export function ServiceRequestDisplayControl(props) {
                     ) : (<span className="sr-noresp">Sin respuesta aún</span>)}
                   </td>
                   <td className="sr-actions">
-                    {sr.status === "active" && resp ? (
+                    {/* Completar: SOLO nuestros SRs (CL) con respuesta → cerramos lo propio */}
+                    {isOwn && active && resp ? (
                       <button className="sr-btn-complete" disabled={busyId === sr.id} onClick={() => completeOnly(sr, node)}>
                         {busyId === sr.id ? "…" : "Completar"}
                       </button>
                     ) : null}
-                    {sr.status === "active" && !resp ? (
+                    {/* Contestar: SOLO SRs de otro país sin respuesta → creamos la contrarreferencia (no completamos) */}
+                    {!isOwn && active && !resp ? (
                       <button className="sr-btn-answer" onClick={() => openAnswer(sr, node)}>Contestar</button>
                     ) : null}
                   </td>

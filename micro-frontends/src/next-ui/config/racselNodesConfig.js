@@ -91,8 +91,9 @@ export function cleanIdentifier(value) {
 
 // Códigos LOINC del DocumentReference por tipo de documento RACSEL
 export const DOC_TYPE = {
-  INTERCONSULTA: '11488-4',      // LACCompositionIT  (Consultation note)
-  MEDICATION_REPORT: '56445-0',  // LACCompositionMeOw (Medication summary)
+  INTERCONSULTA: '11488-4',       // LACCompositionIT  (Consultation note) — type de la Composition
+  CONTRARREFERENCIA: '57133-1',   // Referral note — type que el mediador estampa en el DocumentReference
+  MEDICATION_REPORT: '56445-0',   // LACCompositionMeOw (Medication summary)
 };
 
 // Flujo RESOURCE-based: la interconsulta viaja como ServiceRequest suelto (LACServiceRequestIT),
@@ -179,11 +180,11 @@ export async function fetchServiceRequestsAllNodes(axiosInst, identifier) {
   return perNode.flat();
 }
 
-// MULTI-NODO: consulta las contrarreferencias en CADA nodo. Busca AMBOS types del documento de
-// respuesta: 11488-4 (Consultation note, builder viejo) y 57133-1 (Referral note, mediador actual),
-// porque distintos flujos estamparon distinto type en el DocumentReference. Comma = OR en FHIR.
+// MULTI-NODO: consulta las contrarreferencias en CADA nodo por su DocumentReference.type = 57133-1
+// (Referral note) — el mismo type que estampa el mediador al crear el MHD. Así vemos tanto nuestras
+// respuestas como las que otros países dejaron (en SUS nodos) a nuestras interconsultas.
 // Devuelve [{ docRef, bundleUrl, relatedRefs, date, node }].
-export async function fetchResponseDocsAllNodes(axiosInst, identifier, typeCode = '11488-4,57133-1') {
+export async function fetchResponseDocsAllNodes(axiosInst, identifier, typeCode = DOC_TYPE.CONTRARREFERENCIA) {
   const id = cleanIdentifier(identifier);
   if (!id) return [];
   const nodes = listNodes();
