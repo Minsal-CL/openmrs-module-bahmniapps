@@ -16,18 +16,47 @@ const absUrl = (ref, base) => {
   return `${base || NODES_CONFIG.NATIONAL_FHIR_BASE}/${String(ref).replace(/^\//, "")}`;
 };
 
-const responseForSr = (responses, sr) =>
-  responses.find((r) => (r.relatedRefs || []).some(
-    (ref) => new RegExp(`(^|/)ServiceRequest/${sr.id}$`).test(String(ref))
-  ));
+// Correlación respuesta↔interconsulta. Canónico (IG Track 1.2): DocumentReference.context.related
+// POR IDENTIFIER = IDOrden (= ServiceRequest.identifier.value). Fallback: por referencia al SR.
+const responseForSr = (responses, sr) => {
+  const idOrden = (sr.identifier && sr.identifier[0] && sr.identifier[0].value) || null;
+  return responses.find((r) =>
+    (idOrden && (r.relatedIds || []).some((v) => String(v) === String(idOrden))) ||
+    (r.relatedRefs || []).some((ref) => new RegExp(`(^|/)ServiceRequest/${sr.id}$`).test(String(ref)))
+  );
+};
+
+// Código de país (ISO 3166-1 alpha-2) de un participante (requester/performer).
+// Soporta: (a) referencia lógica { identifier:{ system iso3166, value:"CL" } } (nuestro form / IG),
+// (b) referencia literal "Organization/CL" (otros nodos), (c) org contenida legacy con address.country.
+const ccFromParticipant = (sr, p) => {
+  if (!p) return "";
+  const id = p.identifier;
+  if (id && /3166/.test(id.system || "") && id.value) return String(id.value).toUpperCase();
+  const m = /Organization\/([A-Za-z]{2})\b/.exec(p.reference || "");
+  if (m) return m[1].toUpperCase();
+  const refId = String(p.reference || "").replace(/^#/, "");
+  const c = (sr.contained || []).find((x) => x.id === refId && x.resourceType === "Organization");
+  const cc = c && c.address && c.address[0] && c.address[0].country;
+  return cc ? String(cc).toUpperCase() : "";
+};
+// Partes del IDOrden con formato del IG "<ORIGEN>-<DESTINO>-<año>-<sec>" (ej. UY-CL-2026-...).
+const idOrdenCC = (sr, idx) => {
+  const parts = String((sr.identifier && sr.identifier[0] && sr.identifier[0].value) || "").split("-");
+  return /^[A-Za-z]{2}$/.test(parts[idx] || "") ? parts[idx].toUpperCase() : "";
+};
+// Origen = quién EMITIÓ (requester). Fallback: prefijo del IDOrden, luego el nodo donde vive el SR.
+const originCountryOf = (sr, node) =>
+  ccFromParticipant(sr, sr.requester) || idOrdenCC(sr, 0) || (node && node.country) || "—";
+// Destino = a dónde se envió (performer[0]).
+const destCountryOf = (sr) =>
+  ccFromParticipant(sr, (sr.performer || [])[0]) || idOrdenCC(sr, 1) || "—";
 
 const destinationOf = (sr) => {
-  const contained = (sr.contained || []).find((c) => c.id === "org-dest");
-  if (contained) {
-    const country = contained.address && contained.address[0] && contained.address[0].country;
-    return [contained.name, country].filter(Boolean).join(" · ");
-  }
-  return (sr.performer && sr.performer[0] && sr.performer[0].display) || "—";
+  const p = (sr.performer || [])[0];
+  const name = (p && p.display) || "";
+  const cc = destCountryOf(sr);
+  return [name, cc !== "—" ? cc : null].filter(Boolean).join(" · ") || "—";
 };
 
 const specialtyOf = (sr) => (sr.code && sr.code.text) || "—";
@@ -90,7 +119,7 @@ export function ServiceRequestDisplayControl(props) {
   useEffect(() => { load(); }, [load]);
 
   const countries = useMemo(
-    () => [...new Set(items.map((it) => it.node && it.node.country).filter(Boolean))].sort(),
+    () => [...new Set(items.map((it) => originCountryOf(it.resource, it.node)).filter((c) => c && c !== "—"))].sort(),
     [items]);
   const specialties = useMemo(
     () => [...new Set(items.map((it) => specialtyOf(it.resource)).filter((s) => s && s !== "—"))].sort(),
@@ -100,7 +129,7 @@ export function ServiceRequestDisplayControl(props) {
     [items]);
 
   const visible = useMemo(() => items.filter((it) => {
-    if (fCountry && (it.node && it.node.country) !== fCountry) return false;
+    if (fCountry && originCountryOf(it.resource, it.node) !== fCountry) return false;
     if (fSpecialty && specialtyOf(it.resource) !== fSpecialty) return false;
     if (fStatus && it.resource.status !== fStatus) return false;
     return true;
@@ -139,6 +168,9 @@ export function ServiceRequestDisplayControl(props) {
       // referencia externa que hapinacional NO intenta resolver localmente (evita HAPI-1094).
       await submitContrarreferencia(axiosSR, {
         identifier, patientUuid, narrative: answerText.trim(),
+        // IDOrden del SR (canónico: context.related por identifier). Portable aunque el SR viva
+        // en otro nodo. Mandamos también srRef como respaldo.
+        srIdentifier: (sr.identifier && sr.identifier[0]) || undefined,
         srRef: `${node.base}/ServiceRequest/${sr.id}`, base: NODES_CONFIG.NATIONAL_FHIR_BASE,
       });
       setAnswering(null); setAnswerText("");
@@ -167,7 +199,7 @@ export function ServiceRequestDisplayControl(props) {
   const filters = (
     <div className="sr-filters">
       <select value={fCountry} onChange={(e) => setFCountry(e.target.value)}>
-        <option value="">País: todos</option>
+        <option value="">Origen: todos</option>
         {countries.map((c) => <option key={c} value={c}>{c}</option>)}
       </select>
       <select value={fSpecialty} onChange={(e) => setFSpecialty(e.target.value)}>
@@ -192,20 +224,22 @@ export function ServiceRequestDisplayControl(props) {
         <table className="sr-table">
           <thead>
             <tr>
-              <th>País</th><th>Estado</th><th>Especialidad</th>
+              <th>Origen</th><th>Destino</th><th>Estado</th><th>Especialidad</th>
               <th>Interconsulta</th><th>Respuesta</th><th aria-label="acciones" />
             </tr>
           </thead>
           <tbody>
             {visible.map(({ resource: sr, node }) => {
               const resp = responseForSr(responses, sr);
-              // Propio = SR emitido por NUESTRO nodo (CL). Solo lo propio se completa; lo ajeno se contesta.
-              const isOwn = (node.country || "") === NODES_CONFIG.OWN_COUNTRY
-                || node.base === NODES_CONFIG.NATIONAL_FHIR_BASE;
+              const origin = originCountryOf(sr, node);
+              // Propio = interconsulta EMITIDA por nosotros (Origen === CL). Solo lo propio se completa;
+              // lo ajeno (emitido por otro país) se contesta. Se gatea por ORIGEN, no por el nodo.
+              const isOwn = origin === NODES_CONFIG.OWN_COUNTRY;
               const active = sr.status === "active";
               return (
                 <tr key={`${node.base}|${sr.id}`}>
-                  <td>{node.country || "—"}</td>
+                  <td>{origin}</td>
+                  <td>{destCountryOf(sr)}</td>
                   <td><span className={`sr-status sr-status--${sr.status}`}>{sr.status}</span></td>
                   <td>{specialtyOf(sr)}</td>
                   <td>

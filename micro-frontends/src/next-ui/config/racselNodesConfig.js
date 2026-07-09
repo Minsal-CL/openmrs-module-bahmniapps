@@ -130,9 +130,10 @@ export async function fetchResponseDocsByPatient(axiosInst, identifier, typeCode
   return docRefs.map((dr) => {
     let bundleUrl = (dr.content || []).map((c) => c && c.attachment && c.attachment.url).find(Boolean);
     if (bundleUrl && !/^https?:\/\//i.test(bundleUrl)) bundleUrl = `${base}/${String(bundleUrl).replace(/^\//, '')}`;
-    const relatedRefs = ((dr.context && dr.context.related) || [])
-      .map((r) => r && r.reference).filter(Boolean);
-    return { docRef: dr, bundleUrl, relatedRefs, date: dr.date || (dr.meta && dr.meta.lastUpdated) };
+    const related = (dr.context && dr.context.related) || [];
+    const relatedRefs = related.map((r) => r && r.reference).filter(Boolean);
+    const relatedIds = related.map((r) => r && r.identifier && r.identifier.value).filter(Boolean);
+    return { docRef: dr, bundleUrl, relatedRefs, relatedIds, date: dr.date || (dr.meta && dr.meta.lastUpdated) };
   });
 }
 
@@ -199,8 +200,10 @@ export async function fetchResponseDocsAllNodes(axiosInst, identifier, typeCode 
       return docRefs.map((dr) => {
         let bundleUrl = (dr.content || []).map((c) => c && c.attachment && c.attachment.url).find(Boolean);
         if (bundleUrl && !/^https?:\/\//i.test(bundleUrl)) bundleUrl = `${node.base}/${String(bundleUrl).replace(/^\//, '')}`;
-        const relatedRefs = ((dr.context && dr.context.related) || []).map((r) => r && r.reference).filter(Boolean);
-        return { docRef: dr, bundleUrl, relatedRefs, date: dr.date || (dr.meta && dr.meta.lastUpdated), node };
+        const related = (dr.context && dr.context.related) || [];
+        const relatedRefs = related.map((r) => r && r.reference).filter(Boolean);
+        const relatedIds = related.map((r) => r && r.identifier && r.identifier.value).filter(Boolean);
+        return { docRef: dr, bundleUrl, relatedRefs, relatedIds, date: dr.date || (dr.meta && dr.meta.lastUpdated), node };
       });
     } catch (e) { return []; }
   }));
@@ -274,10 +277,11 @@ export async function fetchIpsSummary(axiosInst, bundleUrl) {
 // El dashboard NO arma el documento: manda { narrativa, srRef, paciente } al endpoint del mediador,
 // y el mediador construye y POSTea el LACBundleTransactionMHDIT (ITI-65) al nodo nacional.
 // ============================================================================
-export async function submitContrarreferencia(axiosInst, { identifier, patientUuid, narrative, srRef }) {
+export async function submitContrarreferencia(axiosInst, { identifier, patientUuid, narrative, srRef, srIdentifier }) {
   const endpoint = NODES_CONFIG.CONTRARREF_ENDPOINT;
   if (!endpoint) throw new Error('Endpoint de contrarreferencia no configurado (RACSEL_CONTRARREF_ENDPOINT)');
-  const body = { patientUuid, identifier: cleanIdentifier(identifier), narrative, srRef };
+  // srIdentifier = IDOrden del SR (canónico: context.related por identifier). srRef como respaldo.
+  const body = { patientUuid, identifier: cleanIdentifier(identifier), narrative, srRef, srIdentifier };
   await axiosInst.post(endpoint, body, {
     headers: { ...buildAuthHeaders('application/json'), 'Content-Type': 'application/json' },
   });
