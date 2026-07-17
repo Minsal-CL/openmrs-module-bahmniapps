@@ -14,7 +14,8 @@
 const globalCfg = (typeof window !== 'undefined' && window.__MFE_CONFIG__) || {};
 const env = (typeof process !== 'undefined' && process.env) || {};
 
-const DEFAULT_NATIONAL_FHIR_BASE = 'https://hapinacional.nodonacionalph4h-dev.minsal.cl/fhir';
+//const DEFAULT_NATIONAL_FHIR_BASE = 'https://hapinacional.nodonacionalph4h-dev.minsal.cl/fhir';
+const DEFAULT_NATIONAL_FHIR_BASE = 'https://gazelle.racsel.org:11199/fhir';
 const DEFAULT_RESOURCE_FHIR_BASE = 'https://hapilocal.nodonacionalph4h-dev.minsal.cl/fhir';
 
 // Rutas a NN de otros países, hardcodeadas porque RACSEL_COUNTRY_ROUTES vía .env no se pudo levantar
